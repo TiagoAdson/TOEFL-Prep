@@ -1,114 +1,71 @@
-import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { SettingsProvider } from './contexts/SettingsContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import Sidebar from './components/Sidebar'
+import Dashboard from './pages/Dashboard'
+import Login from './pages/Login'
+import TestOfConcept from './pages/TestOfConcept'
+import Exercise from './pages/Exercise'
+import Simulado from './pages/Simulado'
+import DiarioErros from './pages/DiarioErros'
+import TutorHumano from './pages/TutorHumano'
+import MinhaConta from './pages/MinhaConta'
 import './App.css'
 
-interface SkillData {
-  label: string
-  icon: string
-  completed: number
-  total: number
-  percentage: number
-}
-
-function App() {
-  const [timeLeft, setTimeLeft] = useState(3600)
-  const [timerRunning, setTimerRunning] = useState(false)
-  const generalProgress = 28
-
-  const skills: SkillData[] = [
-    { label: 'Reading', icon: '📖', completed: 4, total: 12, percentage: 33 },
-    { label: 'Listening', icon: '🎧', completed: 2, total: 18, percentage: 28 },
-    { label: 'Speaking', icon: '🎤', completed: 1, total: 8, percentage: 12 },
-    { label: 'Writing', icon: '✍️', completed: 7, total: 18, percentage: 39 },
-  ]
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined
-    if (timerRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => prev - 1)
-      }, 1000)
-    }
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [timerRunning, timeLeft])
-
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  }
-
+function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>TOEFL Prep</h1>
-      </header>
-
-      <main className="app-main">
-        <section className="study-session">
-          <div className="session-header">
-            <h2>Sua sessão de estudo</h2>
-            <p>Mantenha o foco. Cada minuto conta.</p>
-          </div>
-
-          <div className="timer-section">
-            <div className="timer">
-              <span className="timer-display">{formatTime(timeLeft)}</span>
-              <button
-                className="timer-btn-play"
-                onClick={() => setTimerRunning(!timerRunning)}
-              >
-                {timerRunning ? '⏸' : '▶'}
-              </button>
-              <button
-                className="timer-btn-reset"
-                onClick={() => { setTimeLeft(3600); setTimerRunning(false); }}
-              >
-                ↻
-              </button>
-            </div>
-          </div>
-
-          <div className="progress-section">
-            <label className="progress-label">Progresso Geral</label>
-            <div className="progress-bar-container">
-              <div className="progress-bar" style={{ width: `${generalProgress}%` }}></div>
-            </div>
-            <span className="progress-percentage">{generalProgress}%</span>
-          </div>
-
-          <div className="skills-grid">
-            {skills.map((skill) => (
-              <div key={skill.label} className="skill-card">
-                <div className="skill-header">
-                  <span className="skill-icon">{skill.icon}</span>
-                  <span className="skill-count">
-                    {skill.completed}/{skill.total}
-                  </span>
-                </div>
-                <h3 className="skill-label">{skill.label}</h3>
-                <p className="skill-tasks">{skill.total} tarefas restantes</p>
-                <div className="skill-progress-bar">
-                  <div
-                    className="skill-progress"
-                    style={{ width: `${skill.percentage}%` }}
-                  ></div>
-                </div>
-                <span className="skill-percentage">{skill.percentage}%</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="action-buttons">
-            <button className="btn btn-primary">Iniciar Simulado</button>
-            <button className="btn btn-secondary">Gravar Áudio</button>
-          </div>
-        </section>
+    <div style={S.shell}>
+      <Sidebar />
+      <main style={S.main}>
+        <div style={S.content}>{children}</div>
       </main>
     </div>
   )
 }
 
-export default App
+function AppRoutes() {
+  const { session, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 14 }}>
+        Carregando...
+      </div>
+    )
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
+
+      <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+      <Route path="/simulado" element={<ProtectedRoute><AppLayout><Simulado /></AppLayout></ProtectedRoute>} />
+      <Route path="/diario-erros" element={<ProtectedRoute><AppLayout><DiarioErros /></AppLayout></ProtectedRoute>} />
+      <Route path="/tutor-humano" element={<ProtectedRoute><AppLayout><TutorHumano /></AppLayout></ProtectedRoute>} />
+      <Route path="/minha-conta" element={<ProtectedRoute><AppLayout><MinhaConta /></AppLayout></ProtectedRoute>} />
+      <Route path="/test-of-concept/:contentId" element={<ProtectedRoute><AppLayout><TestOfConcept /></AppLayout></ProtectedRoute>} />
+      <Route path="/exercise/:contentId/:block" element={<ProtectedRoute><AppLayout><Exercise /></AppLayout></ProtectedRoute>} />
+
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <SettingsProvider>
+          <AppRoutes />
+        </SettingsProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
+
+const S: Record<string, React.CSSProperties> = {
+  shell: { display: 'flex', minHeight: '100vh', background: 'var(--bg)' },
+  main: { flex: 1, minWidth: 0, overflowY: 'auto' },
+  content: { maxWidth: '820px', margin: '0 auto', padding: '36px 28px' },
+}
