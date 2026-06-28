@@ -36,6 +36,52 @@ export default function MinhaConta() {
       <h2 style={S.pageTitle}>Minha Conta</h2>
       <p style={S.pageDesc}>{profile?.full_name ?? user?.email}</p>
 
+      {/* 0 — Meta de Nota TOEFL */}
+      <Section title="Meta de Nota no TOEFL" icon="🏆">
+        <div style={S.row}>
+          <span style={S.rowLabel}>Sua meta de pontuação</span>
+          <strong style={{ color: '#4F46E5', fontSize: 22, fontWeight: 700 }}>{settings.toeflTarget}</strong>
+        </div>
+        <input
+          type="range"
+          min={60} max={120} step={5}
+          value={settings.toeflTarget}
+          onChange={e => updateSetting('toeflTarget', Number(e.target.value))}
+          style={S.range}
+        />
+        <div style={S.rangeLabels}>
+          <span>60</span>
+          <span style={{ color: '#94A3B8', fontSize: 12 }}>Padrão: 110</span>
+          <span>120</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+          {[79, 90, 100, 110, 120].map(score => (
+            <button
+              key={score}
+              onClick={() => updateSetting('toeflTarget', score)}
+              style={{
+                ...S.presetBtn,
+                background: settings.toeflTarget === score ? '#4F46E5' : 'var(--bg)',
+                color:      settings.toeflTarget === score ? 'white'   : 'var(--text-secondary)',
+                border:     `1px solid ${settings.toeflTarget === score ? '#4F46E5' : 'var(--border)'}`,
+                fontWeight: settings.toeflTarget === score ? 700 : 500,
+              }}
+            >
+              {score}
+            </button>
+          ))}
+        </div>
+        <p style={{ ...S.hint, marginTop: 10 }}>
+          {settings.toeflTarget >= 110
+            ? 'Meta excelente! Apto para programas altamente competitivos.'
+            : settings.toeflTarget >= 100
+            ? 'Meta forte. Atende à maioria dos programas de pós-graduação.'
+            : settings.toeflTarget >= 90
+            ? 'Meta sólida. Suficiente para a maioria das universidades americanas.'
+            : 'Meta inicial. Vá aumentando conforme avança nos módulos.'}
+        </p>
+      </Section>
+
       {/* 1 — Meta Semanal */}
       <Section title="Meta Semanal de Exercícios" icon="🎯">
         <div style={S.row}>
@@ -171,4 +217,5 @@ const S: Record<string, React.CSSProperties> = {
   toggle: { position: 'relative', width: 46, height: 26, borderRadius: 999, border: 'none', cursor: 'pointer', transition: 'background 0.25s', flexShrink: 0, padding: 0 },
   toggleDot: { position: 'absolute', top: 2, width: 22, height: 22, borderRadius: '50%', transition: 'transform 0.25s', display: 'block' },
   idBox: { display: 'block', marginTop: 8, padding: '10px 14px', background: 'var(--bg)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', border: '1px solid var(--border)', wordBreak: 'break-all', lineHeight: 1.6 },
+  presetBtn: { padding: '6px 16px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, transition: 'all 0.15s' },
 }

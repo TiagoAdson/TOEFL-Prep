@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { supabase, supabaseConfigured } from '../utils/supabase'
 
 interface ContentNode {
@@ -28,6 +29,7 @@ const LEVEL_ORDER = ['A1','A2','B1','B2','C1','C2']
 export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const { user, profile, signOut } = useAuth()
   const { isDark, toggleTheme } = useTheme()
+  const { settings } = useSettings()
   const navigate = useNavigate()
   const [contents, setContents] = useState<ContentNode[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)
@@ -117,7 +119,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
         <button onClick={() => { navigate('/'); onClose?.() }} style={S.logoBtn}>
           <span style={S.logoText}>Meu Inglês</span>
         </button>
-        <span style={S.badge}>SUA META: 110 TOEFL</span>
+        <span style={S.badge}>META: {settings.toeflTarget} TOEFL</span>
         <button onClick={toggleTheme} style={S.themeToggle} title={isDark ? 'Modo claro' : 'Modo escuro'}>
           {isDark ? '☀️' : '🌙'}
         </button>

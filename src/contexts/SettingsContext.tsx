@@ -8,15 +8,17 @@ export interface TOEFLTimers {
 }
 
 export interface AppSettings {
-  metaGoal:  number      // weekly exercise goal, 30-150
-  darkMode:  boolean
-  timers:    TOEFLTimers
-  tutorId:   string
+  metaGoal:    number      // weekly exercise goal, 30-150
+  toeflTarget: number      // target TOEFL score, 60-120
+  darkMode:    boolean
+  timers:      TOEFLTimers
+  tutorId:     string
 }
 
 const DEFAULTS: AppSettings = {
-  metaGoal: 70,
-  darkMode: false,
+  metaGoal:    70,
+  toeflTarget: 110,
+  darkMode:    false,
   timers: { speaking: 45, writing: 1800, reading: 900, listening: 600 },
   tutorId: '',
 }
