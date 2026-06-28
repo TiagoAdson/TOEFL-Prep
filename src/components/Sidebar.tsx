@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { supabase, supabaseConfigured } from '../utils/supabase'
 
 interface ContentNode {
@@ -24,8 +25,9 @@ const NAV = [
 
 const LEVEL_ORDER = ['A1','A2','B1','B2','C1','C2']
 
-export default function Sidebar() {
+export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const { user, profile, signOut } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [contents, setContents] = useState<ContentNode[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)
@@ -103,11 +105,21 @@ export default function Sidebar() {
     return acc
   }, {})
 
+  const sidebarStyle: React.CSSProperties = {
+    ...S.sidebar,
+    transform: open === false ? 'translateX(-100%)' : undefined,
+  }
+
   return (
-    <aside style={S.sidebar}>
+    <aside style={sidebarStyle} className={`sidebar ${open ? 'sidebar-open' : ''}`}>
+      {/* Botão fechar no mobile */}
+      {onClose && (
+        <button onClick={onClose} style={S.closeBtn} className="sidebar-close" aria-label="Fechar menu">✕</button>
+      )}
+
       {/* Logo */}
       <div style={S.logoArea}>
-        <button onClick={() => navigate('/')} style={S.logoBtn}>
+        <button onClick={() => { navigate('/'); onClose?.() }} style={S.logoBtn}>
           <span style={S.logoText}>Meu Inglês</span>
         </button>
         <span style={S.badge}>SUA META: 110 TOEFL</span>
@@ -168,6 +180,9 @@ export default function Sidebar() {
 
       {/* Rodapé do sidebar */}
       <div style={S.footer}>
+        <button onClick={toggleTheme} style={S.themeBtn} title={isDark ? 'Modo claro' : 'Modo escuro'}>
+          {isDark ? '☀️' : '🌙'}
+        </button>
         <span style={S.footerName}>{profile?.full_name ?? user?.email}</span>
         <button onClick={signOut} style={S.signoutBtn}>Sair</button>
       </div>
@@ -363,6 +378,29 @@ const S: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  themeBtn: {
+    fontSize: '16px',
+    background: 'none',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '4px 8px',
+    cursor: 'pointer',
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  closeBtn: {
+    display: 'none',
+    position: 'absolute' as const,
+    top: 12,
+    right: 12,
+    background: 'none',
+    border: 'none',
+    fontSize: 18,
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    padding: 4,
+    lineHeight: 1,
   },
   signoutBtn: {
     fontSize: '12px',

@@ -326,46 +326,124 @@ html, body { font-family: var(--font); background: var(--bg); color: var(--text-
 
 /* ── RESPONSIVE ─────────────────────────────────────────── */
 
-/* ── DARK MODE ──────────────────────────────────────────────── */
+/* ── DARK MODE PREMIUM ───────────────────────────────────────── */
+
+html { transition: background-color 0.3s ease, color 0.3s ease; }
 
 [data-theme="dark"] {
   --primary:        #818CF8;
   --primary-light:  rgba(129, 140, 248, 0.12);
   --primary-hover:  #6366F1;
-  --text-primary:   #F1F5F9;
+  --text-primary:   #E2E8F0;
   --text-secondary: #94A3B8;
   --text-muted:     #64748B;
   --border:         #1E293B;
-  --surface:        #0F172A;
-  --bg:             #020617;
-  --shadow-sm:      0 1px 3px rgba(0,0,0,0.5);
-  --shadow-md:      0 4px 16px rgba(0,0,0,0.6);
-  --shadow-lg:      0 20px 48px rgba(0,0,0,0.7);
+  --surface:        #1E293B;
+  --bg:             #0F172A;
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md:      0 4px 16px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.3);
+  --shadow-lg:      0 20px 48px rgba(0,0,0,0.6), 0 8px 20px rgba(0,0,0,0.4);
 }
 
+/* Sidebar em dark mode */
+[data-theme="dark"] .sidebar {
+  background: #0F172A;
+  border-right-color: #1E293B;
+}
+
+/* Cards genéricos em dark mode */
 [data-theme="dark"] .app-header {
-  background: rgba(15,23,42,0.85);
+  background: rgba(15,23,42,0.92);
   border-bottom-color: #1E293B;
+  backdrop-filter: blur(16px);
 }
 
-[data-theme="dark"] .option-btn:hover { background: #1E293B; border-color: #6366F1; }
+/* Option buttons */
+[data-theme="dark"] .option-btn { background: #1E293B; border-color: #334155; color: #E2E8F0; }
+[data-theme="dark"] .option-btn:hover { background: #273449; border-color: #6366F1; }
 [data-theme="dark"] .option-btn.selected { background: #1E1B4B; border-color: #818CF8; color: #818CF8; }
-[data-theme="dark"] .feedback-panel.correct  { background: #052e16; border-color: #166534; }
-[data-theme="dark"] .feedback-panel.incorrect{ background: #1c0010; border-color: #9f1239; }
+
+/* Feedback panels */
+[data-theme="dark"] .feedback-panel.correct   { background: #052e16; border-color: #166534; }
+[data-theme="dark"] .feedback-panel.incorrect { background: #1c0010; border-color: #9f1239; }
+[data-theme="dark"] .feedback-panel.correct h4  { color: #4ade80; }
+[data-theme="dark"] .feedback-panel.incorrect h4 { color: #f87171; }
+[data-theme="dark"] .feedback-panel p { color: #94A3B8; }
+
+/* Inputs */
 [data-theme="dark"] .exercise-input,
-[data-theme="dark"] .exercise-textarea { background: #0F172A; color: #F1F5F9; border-color: #1E293B; }
+[data-theme="dark"] .exercise-textarea {
+  background: #0F172A;
+  color: #E2E8F0;
+  border-color: #334155;
+}
 [data-theme="dark"] .exercise-input:focus,
-[data-theme="dark"] .exercise-textarea:focus { border-color: #818CF8; box-shadow: 0 0 0 3px rgba(129,140,248,0.15); }
-[data-theme="dark"] .btn-secondary { background: #0F172A; border-color: #1E293B; color: #F1F5F9; }
-[data-theme="dark"] .btn-secondary:hover { background: #1E293B; }
+[data-theme="dark"] .exercise-textarea:focus {
+  border-color: #818CF8;
+  box-shadow: 0 0 0 3px rgba(129,140,248,0.15);
+}
+[data-theme="dark"] .exercise-input::placeholder,
+[data-theme="dark"] .exercise-textarea::placeholder { color: #475569; }
+
+/* Buttons */
+[data-theme="dark"] .btn-secondary { background: #1E293B; border-color: #334155; color: #E2E8F0; }
+[data-theme="dark"] .btn-secondary:hover { background: #273449; border-color: #475569; }
 [data-theme="dark"] .btn-signout { background: none; border-color: #1E293B; color: #94A3B8; }
 
-/* ── RESPONSIVE ─────────────────────────────────────────────── */
+/* Progress bars */
+[data-theme="dark"] .progress-bar-wrap { background: #1E293B; }
 
+/* ── MOBILE RESPONSIVE ───────────────────────────────────────── */
+
+/* Hamburger aparece só no mobile */
 @media (max-width: 768px) {
+  .hamburger-btn { display: flex !important; }
+
+  /* Sidebar: escondida por padrão no mobile, desliza ao abrir */
+  .sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 150;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+  }
+  .sidebar.sidebar-open {
+    transform: translateX(0) !important;
+  }
+
+  /* Overlay visível quando sidebar aberta */
+  .sidebar.sidebar-open ~ * .overlay,
+  [class*="overlay"] { display: block !important; }
+
+  /* Botão fechar sidebar no mobile */
+  .sidebar-close { display: block !important; }
+
+  /* Main content: largura total no mobile */
+  main { padding: 0; }
+  [class*="content"] { padding: 20px 16px !important; max-width: 100% !important; }
+
+  /* Cards empilham no mobile */
+  [class*="statsGrid"], [class*="grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Botões touch-friendly */
+  .btn-primary, .btn-secondary, button[class*="train"] {
+    min-height: 48px;
+    font-size: 15px !important;
+  }
+
+  /* Hero card empilha verticalmente */
+  [class*="heroCard"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
   .app-main    { padding: 24px 16px; }
   .app-header  { height: 52px; padding: 0 16px; }
   .header-nav  { display: none; }
   .header-subtitle { display: none; }
-  .app-header h1 { font-size: 15px; }
 }

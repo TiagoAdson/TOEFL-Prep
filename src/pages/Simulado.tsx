@@ -185,6 +185,25 @@ export default function Simulado() {
 // ============================================================
 
 function SimuladoIntro({ onStart, onBack }: { onStart: () => void; onBack: () => void }) {
+  const { user } = useAuth()
+  const [unlocked, setUnlocked] = useState<boolean | null>(null)
+  const [passiveAccuracy, setPassiveAccuracy] = useState(0)
+
+  useEffect(() => {
+    if (!user || !supabaseConfigured) { setUnlocked(true); return }
+    supabase
+      .from('user_progress')
+      .select('is_correct')
+      .eq('user_id', user.id)
+      .eq('content_id', 'passive-voice')
+      .then(({ data }) => {
+        if (!data || data.length === 0) { setUnlocked(false); setPassiveAccuracy(0); return }
+        const acc = Math.round((data.filter(p => p.is_correct).length / data.length) * 100)
+        setPassiveAccuracy(acc)
+        setUnlocked(acc >= 80)
+      })
+  }, [user])
+
   const items = [
     { icon: '📖', name: 'Reading',   pts: '30', desc: 'Texto academico + 5 questoes de multipla escolha — avaliado por IA' },
     { icon: '🎧', name: 'Listening', pts: '30', desc: 'Simulacao de audio + 5 questoes de compreensao — avaliado por IA' },
@@ -192,35 +211,53 @@ function SimuladoIntro({ onStart, onBack }: { onStart: () => void; onBack: () =>
     { icon: '✍️', name: 'Writing',   pts: '30', desc: 'Redacao academica (min. 150 palavras) — IA avalia com rubrica oficial' },
   ]
 
+  if (unlocked === null) return <div style={{ textAlign: 'center', padding: 48, color: '#94A3B8' }}>Verificando acesso...</div>
+
   return (
     <div style={{ maxWidth: 560, margin: '0 auto' }}>
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 6 }}>Simulado TOEFL IBT</h2>
-        <p style={{ color: '#6b7280', lineHeight: 1.6, fontSize: 15 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Simulado TOEFL IBT</h2>
+        <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, fontSize: 15 }}>
           4 secoes com avaliacao por IA (Claude). Score maximo: 120 pontos.
         </p>
       </div>
 
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', marginBottom: 28, background: 'white' }}>
+      {!unlocked && (
+        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid #F59E0B', borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, color: '#92400E', marginBottom: 6, fontSize: 14 }}>🔒 Simulado bloqueado</div>
+          <p style={{ fontSize: 13, color: '#78350F', margin: 0, lineHeight: 1.6 }}>
+            Complete o Módulo 14 — <strong>Passive Voice</strong> com ≥80% de acurácia para desbloquear.
+            <br />Sua acurácia atual: <strong>{passiveAccuracy}%</strong> {passiveAccuracy === 0 ? '(não iniciado)' : ''}
+          </p>
+        </div>
+      )}
+
+      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 28, background: 'var(--surface)' }}>
         {items.map((item, i) => (
           <div key={item.name} style={{
             display: 'flex', gap: 16, padding: '16px 20px', alignItems: 'flex-start',
-            borderTop: i > 0 ? '1px solid #f3f4f6' : 'none',
+            borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+            opacity: unlocked ? 1 : 0.5,
           }}>
             <span style={{ fontSize: 20, marginTop: 2, width: 28, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2, color: '#111827' }}>{item.name}</div>
-              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{item.desc}</div>
+              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2, color: 'var(--text-primary)' }}>{item.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{item.desc}</div>
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb', flexShrink: 0 }}>{item.pts} pts</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--primary)', flexShrink: 0 }}>{item.pts} pts</div>
           </div>
         ))}
       </div>
 
       <div style={{ display: 'flex', gap: 10 }}>
         <button className="btn-secondary" onClick={onBack}>Voltar</button>
-        <button className="btn-primary" onClick={onStart} style={{ flex: 1, fontSize: 15 }}>
-          Iniciar Simulado →
+        <button
+          className="btn-primary"
+          onClick={onStart}
+          disabled={!unlocked}
+          style={{ flex: 1, fontSize: 15 }}
+        >
+          {unlocked ? 'Iniciar Simulado →' : '🔒 Complete Passive Voice primeiro'}
         </button>
       </div>
     </div>

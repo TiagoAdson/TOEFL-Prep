@@ -27,7 +27,7 @@ export default function Exercise() {
 
   useEffect(() => { loadExercises() }, [contentId, block])
 
-  // ---------- Load 14 exercises: 7 grammar + 7 TOEFL production ----------
+  // ---------- Load 14 exercises with spaced repetition ----------
   const loadExercises = async () => {
     setPageLoading(true)
     setCurrent(0); setScore(0); setUserAnswer(''); setFeedback(null); setSubmitted(false)
@@ -38,27 +38,44 @@ export default function Exercise() {
       return
     }
     try {
-      const { data } = await supabase
-        .from('exercises')
-        .select('*')
-        .eq('content_id', contentId)
-        .order('exercise_number')
+      const [exercisesResult, mistakesResult] = await Promise.all([
+        supabase.from('exercises').select('*').eq('content_id', contentId).order('exercise_number'),
+        user ? supabase
+          .from('mistake_journal')
+          .select('exercise_id, question_text')
+          .eq('user_id', user.id)
+          .eq('content_id', contentId)
+          .eq('is_resolved', false)
+          .lte('spaced_review_date', new Date().toISOString())
+          .limit(4) : Promise.resolve({ data: null }),
+      ])
 
-      const all = data && data.length > 0 ? data : getDemoExercises(contentId || '', blockNum)
-      const grammar    = all.filter(e => e.type === 'gap_fill' || e.type === 'multiple_choice')
-      const production = all.filter(e => e.type === 'production')
+      const all = exercisesResult.data && exercisesResult.data.length > 0
+        ? exercisesResult.data
+        : getDemoExercises(contentId || '', blockNum)
+
+      // Spaced repetition: exercises from mistake_journal que estão vencidos
+      const mistakeIds = new Set((mistakesResult.data || []).map(m => m.exercise_id).filter(Boolean))
+      const reviewExercises = all.filter(e => mistakeIds.has(e.id))
+
+      const remaining = all.filter(e => !mistakeIds.has(e.id))
+      const grammar    = remaining.filter(e => e.type === 'gap_fill' || e.type === 'multiple_choice')
+      const production = remaining.filter(e => e.type === 'production')
 
       const pick = (arr: ExerciseItem[], n: number) =>
         [...arr].sort(() => Math.random() - 0.5).slice(0, n)
 
-      const g = pick(grammar,    Math.min(GRAMMAR_HALF, grammar.length))
-      const t = pick(production, Math.min(GRAMMAR_HALF, production.length))
-      const remaining = DAILY_TOTAL - g.length - t.length
-      const extra = remaining > 0
-        ? pick(grammar.filter(e => !g.includes(e)), remaining)
+      // Até 4 exercícios de revisão, resto completa com novos
+      const reviews = pick(reviewExercises, Math.min(4, reviewExercises.length))
+      const newSlots = DAILY_TOTAL - reviews.length
+      const newGrammarCount = Math.min(GRAMMAR_HALF, Math.ceil(newSlots / 2))
+      const g = pick(grammar, Math.min(newGrammarCount, grammar.length))
+      const t = pick(production, Math.min(newSlots - g.length, production.length))
+      const extra = (newSlots - g.length - t.length) > 0
+        ? pick(grammar.filter(e => !g.includes(e)), newSlots - g.length - t.length)
         : []
 
-      setExercises([...g, ...t, ...extra])
+      setExercises([...reviews, ...g, ...t, ...extra])
     } catch {
       setExercises(getDemoExercises(contentId || '', blockNum))
     } finally {
@@ -96,18 +113,34 @@ export default function Exercise() {
           feedback_received: JSON.stringify(result),
         })
 
-        if (!result.correct) {
+        if (result.correct) {
+          // Marcar como resolvido se existia no diário de erros
           const isRealExercise = ex.id && !ex.id.startsWith('d-')
+          if (isRealExercise) {
+            const nextReview = new Date()
+            nextReview.setDate(nextReview.getDate() + 3) // próxima revisão em 3 dias
+            await supabase.from('mistake_journal')
+              .update({ is_resolved: true, spaced_review_date: nextReview.toISOString() })
+              .eq('user_id', user.id)
+              .eq('exercise_id', ex.id)
+              .eq('is_resolved', false)
+          }
+        } else {
+          const isRealExercise = ex.id && !ex.id.startsWith('d-')
+          // Calcular próxima data de revisão espaçada
+          const nextReview = new Date()
+          nextReview.setDate(nextReview.getDate() + 1) // revisão amanhã por padrão
           await supabase.from('mistake_journal').insert({
-            user_id:      user.id,
-            content_id:   contentId,
-            exercise_id:  isRealExercise ? ex.id : null,
-            question_text: ex.question,
-            question:     ex.question,
-            user_answer:  userAnswer,
+            user_id:        user.id,
+            content_id:     contentId,
+            exercise_id:    isRealExercise ? ex.id : null,
+            question_text:  ex.question,
+            question:       ex.question,
+            user_answer:    userAnswer,
             correct_answer: ex.answer,
-            ai_correction: result.explanation,
-            is_resolved:  false,
+            ai_correction:  result.explanation,
+            is_resolved:    false,
+            spaced_review_date: nextReview.toISOString(),
           })
         }
       }
