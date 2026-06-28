@@ -105,13 +105,8 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
     return acc
   }, {})
 
-  const sidebarStyle: React.CSSProperties = {
-    ...S.sidebar,
-    transform: open === false ? 'translateX(-100%)' : undefined,
-  }
-
   return (
-    <aside style={sidebarStyle} className={`sidebar ${open ? 'sidebar-open' : ''}`}>
+    <aside style={S.sidebar} className={`sidebar ${open ? 'sidebar-open' : ''}`}>
       {/* Botão fechar no mobile */}
       {onClose && (
         <button onClick={onClose} style={S.closeBtn} className="sidebar-close" aria-label="Fechar menu">✕</button>
