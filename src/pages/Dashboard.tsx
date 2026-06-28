@@ -154,7 +154,7 @@ export default function Dashboard() {
             </button>
           </div>
         ) : (
-          <p style={{ color: '#64748B', fontSize: 14 }}>Nenhum conteúdo disponível.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Nenhum conteúdo disponível.</p>
         )}
       </section>
 
@@ -162,10 +162,10 @@ export default function Dashboard() {
       <section style={S.section}>
         <div style={S.simuladoCard}>
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
               Simulado TOEFL
             </h3>
-            <p style={{ fontSize: 13, color: '#64748B' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
               Disponível após dominar o Módulo 13 — Passive Voice
             </p>
           </div>
@@ -181,11 +181,11 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ value, label, accent = '#0F172A' }: { value: string | number; label: string; accent?: string }) {
+function StatCard({ value, label, accent }: { value: string | number; label: string; accent?: string }) {
   return (
     <div style={S.statCard}>
-      <div style={{ fontSize: 32, fontWeight: 700, color: accent, letterSpacing: '-1px' }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 4, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 32, fontWeight: 700, color: accent ?? 'var(--text-primary)', letterSpacing: '-1px' }}>{value}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontWeight: 500 }}>{label}</div>
     </div>
   )
 }
@@ -201,31 +201,33 @@ function levelColor(level: string): string {
 
 const S: Record<string, React.CSSProperties> = {
   section: { marginBottom: 36 },
-  sectionTitle: { fontSize: 18, fontWeight: 600, color: '#0F172A', marginBottom: 16, letterSpacing: '-0.3px' },
+  sectionTitle: { fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16, letterSpacing: '-0.3px' },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 },
   statCard: {
-    background: '#FFFFFF',
-    border: '1px solid #E2E8F0',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 12,
     padding: '18px 20px',
     textAlign: 'center',
-    boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
+    boxShadow: 'var(--shadow-sm)',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   weekBarWrap: { display: 'flex', alignItems: 'center', gap: 12 },
-  weekBarTrack: { flex: 1, height: 6, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' },
+  weekBarTrack: { flex: 1, height: 6, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' },
   weekBarFill: { height: '100%', background: '#F59E0B', borderRadius: 999, transition: 'width 0.5s ease' },
-  weekBarLabel: { fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', fontWeight: 500 },
+  weekBarLabel: { fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 500 },
   heroCard: {
-    background: '#FFFFFF',
-    border: '1px solid #E2E8F0',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 16,
     padding: '24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 24,
-    boxShadow: '0 4px 16px rgba(15,23,42,0.06)',
+    boxShadow: 'var(--shadow-md)',
     flexWrap: 'wrap',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   heroLeft: { flex: 1, minWidth: 200 },
   levelBadge: {
@@ -238,19 +240,19 @@ const S: Record<string, React.CSSProperties> = {
     letterSpacing: '0.3px',
     marginBottom: 8,
   },
-  heroName: { fontSize: 20, fontWeight: 600, color: '#0F172A', margin: '0 0 4px', letterSpacing: '-0.3px' },
-  heroDesc: { fontSize: 13, color: '#64748B', margin: 0 },
+  heroName: { fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px', letterSpacing: '-0.3px' },
+  heroDesc: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 },
   accuracyRow: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 },
-  accuracyTrack: { flex: 1, height: 5, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' },
+  accuracyTrack: { flex: 1, height: 5, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' },
   accuracyFill: { height: '100%', borderRadius: 999, transition: 'width 0.5s ease' },
-  accuracyLabel: { fontSize: 12, color: '#94A3B8', whiteSpace: 'nowrap', fontWeight: 500 },
+  accuracyLabel: { fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontWeight: 500 },
   trainBtn: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: 4,
     padding: '14px 28px',
-    background: '#4F46E5',
+    background: 'var(--primary)',
     color: 'white',
     border: 'none',
     borderRadius: 12,
@@ -266,8 +268,8 @@ const S: Record<string, React.CSSProperties> = {
   },
   trainBtnSub: { fontSize: 11, fontWeight: 400, opacity: 0.8 },
   simuladoCard: {
-    background: '#FFFFFF',
-    border: '1px solid #E2E8F0',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 14,
     padding: '20px 24px',
     display: 'flex',
@@ -275,12 +277,13 @@ const S: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     gap: 16,
     flexWrap: 'wrap',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   simuladoBtn: {
     padding: '10px 20px',
     background: 'transparent',
-    color: '#4F46E5',
-    border: '1.5px solid #4F46E5',
+    color: 'var(--primary)',
+    border: '1.5px solid var(--primary)',
     borderRadius: 10,
     cursor: 'pointer',
     fontFamily: 'inherit',
@@ -346,14 +349,14 @@ function TOEFLScoreSection() {
     <section style={S.section}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
         <h2 style={S.sectionTitle}>Desempenho TOEFL (Estimativa)</h2>
-        <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 400 }}>Baseado nos últimos simulados</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>Baseado nos últimos simulados</span>
       </div>
 
       {!hasData ? (
         <div style={T.empty}>
           <span style={{ fontSize: 28, marginBottom: 8 }}>🎯</span>
-          <p style={{ margin: 0, fontWeight: 600, color: '#334155', fontSize: 14 }}>Nenhum simulado realizado ainda</p>
-          <p style={{ margin: '4px 0 0', color: '#94A3B8', fontSize: 13 }}>Complete um Simulado TOEFL para ver sua estimativa de nota aqui.</p>
+          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Nenhum simulado realizado ainda</p>
+          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>Complete um Simulado TOEFL para ver sua estimativa de nota aqui.</p>
         </div>
       ) : (
         <>
@@ -379,7 +382,7 @@ function TOEFLScoreSection() {
           <div style={T.totalRow}>
             <span style={T.totalLabel}>Total estimado</span>
             <span style={{ ...T.totalScore, color: scoreColor(total / 4) }}>
-              {total}<span style={{ fontSize: 16, fontWeight: 400, color: '#94A3B8' }}>/120</span>
+              {total}<span style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-muted)' }}>/120</span>
             </span>
           </div>
         </>
@@ -395,10 +398,11 @@ const T: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '32px 20px',
-    background: '#F8FAFC',
-    border: '1px dashed #CBD5E1',
+    background: 'var(--bg)',
+    border: '1px dashed var(--border)',
     borderRadius: 14,
     textAlign: 'center',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   grid: {
     display: 'grid',
@@ -407,20 +411,22 @@ const T: Record<string, React.CSSProperties> = {
     marginBottom: 14,
   },
   card: {
-    border: '1px solid #E2E8F0',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 14,
     padding: '18px 20px 16px',
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
-    boxShadow: '0 1px 4px rgba(15,23,42,0.05)',
+    boxShadow: 'var(--shadow-sm)',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   cardTop: { display: 'flex', alignItems: 'center', gap: 7 },
   icon: { fontSize: 16 },
-  label: { fontSize: 12, fontWeight: 600, color: '#475569' },
+  label: { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' },
   score: { fontSize: 34, fontWeight: 700, letterSpacing: '-1.5px', lineHeight: 1 },
-  max: { fontSize: 16, fontWeight: 400, color: '#CBD5E1', marginLeft: 1 },
-  barTrack: { height: 4, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' },
+  max: { fontSize: 16, fontWeight: 400, color: 'var(--border)', marginLeft: 1 },
+  barTrack: { height: 4, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 999, transition: 'width 0.5s ease' },
   totalRow: {
     display: 'flex',
@@ -429,7 +435,7 @@ const T: Record<string, React.CSSProperties> = {
     gap: 8,
     paddingTop: 4,
   },
-  totalLabel: { fontSize: 12, color: '#94A3B8', fontWeight: 500 },
+  totalLabel: { fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 },
   totalScore: { fontSize: 26, fontWeight: 700, letterSpacing: '-1px' },
 }
 
