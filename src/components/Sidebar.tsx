@@ -118,6 +118,9 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
           <span style={S.logoText}>Meu Inglês</span>
         </button>
         <span style={S.badge}>SUA META: 110 TOEFL</span>
+        <button onClick={toggleTheme} style={S.themeToggle} title={isDark ? 'Modo claro' : 'Modo escuro'}>
+          {isDark ? '☀️' : '🌙'}
+        </button>
       </div>
 
       {/* Navegação global */}
@@ -175,9 +178,6 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
 
       {/* Rodapé do sidebar */}
       <div style={S.footer}>
-        <button onClick={toggleTheme} style={S.themeBtn} title={isDark ? 'Modo claro' : 'Modo escuro'}>
-          {isDark ? '☀️' : '🌙'}
-        </button>
         <span style={S.footerName}>{profile?.full_name ?? user?.email}</span>
         <button onClick={signOut} style={S.signoutBtn}>Sair</button>
       </div>
@@ -374,15 +374,16 @@ const S: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  themeBtn: {
-    fontSize: '16px',
+  themeToggle: {
+    fontSize: '14px',
     background: 'none',
     border: '1px solid var(--border)',
-    borderRadius: '8px',
-    padding: '4px 8px',
+    borderRadius: '6px',
+    padding: '3px 7px',
     cursor: 'pointer',
     flexShrink: 0,
     lineHeight: 1,
+    marginLeft: 'auto',
   },
   closeBtn: {
     display: 'none',
