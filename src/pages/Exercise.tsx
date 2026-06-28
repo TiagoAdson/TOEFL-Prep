@@ -97,16 +97,17 @@ export default function Exercise() {
         })
 
         if (!result.correct) {
+          const isRealExercise = ex.id && !ex.id.startsWith('d-')
           await supabase.from('mistake_journal').insert({
-            user_id: user.id,
-            content_id: contentId,
-            exercise_id: ex.id,
-            question: ex.question,
-            user_answer: userAnswer,
+            user_id:      user.id,
+            content_id:   contentId,
+            exercise_id:  isRealExercise ? ex.id : null,
+            question_text: ex.question,
+            question:     ex.question,
+            user_answer:  userAnswer,
             correct_answer: ex.answer,
-            ai_explanation: result.explanation,
-            is_resolved: false,
-            spaced_review_date: null,
+            ai_correction: result.explanation,
+            is_resolved:  false,
           })
         }
       }

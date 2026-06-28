@@ -293,12 +293,20 @@ const S: Record<string, React.CSSProperties> = {
 }
 
 // ── TOEFL Score Section ──────────────────────────────────────
-const MOCK_TOEFL = [
-  { icon: '📖', label: 'Reading',   score: 24, max: 30 },
-  { icon: '🎧', label: 'Listening', score: 19, max: 30 },
-  { icon: '🗣️', label: 'Speaking',  score: 22, max: 30 },
-  { icon: '✍️', label: 'Writing',   score: 26, max: 30 },
-]
+
+const SECTIONS = [
+  { icon: '📖', label: 'Reading',   key: 'reading_score'   },
+  { icon: '🎧', label: 'Listening', key: 'listening_score' },
+  { icon: '🗣️', label: 'Speaking',  key: 'speaking_score'  },
+  { icon: '✍️', label: 'Writing',   key: 'writing_score'   },
+] as const
+
+interface TOEFLScores {
+  reading_score: number
+  listening_score: number
+  speaking_score: number
+  writing_score: number
+}
 
 function scoreColor(score: number): string {
   if (score >= 26) return '#22C55E'
@@ -313,8 +321,26 @@ function scoreBg(score: number): string {
 }
 
 function TOEFLScoreSection() {
-  const total = MOCK_TOEFL.reduce((s, c) => s + c.score, 0)
-  const totalMax = MOCK_TOEFL.reduce((s, c) => s + c.max, 0)
+  const { user } = useAuth()
+  const [scores, setScores] = useState<TOEFLScores | null>(null)
+  const [hasData, setHasData] = useState(false)
+
+  useEffect(() => {
+    if (!user || !supabaseConfigured) return
+    supabase
+      .from('simulado_history')
+      .select('reading_score, listening_score, speaking_score, writing_score')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data) { setScores(data as TOEFLScores); setHasData(true) }
+      })
+  }, [user])
+
+  const s = scores ?? { reading_score: 0, listening_score: 0, speaking_score: 0, writing_score: 0 }
+  const total = s.reading_score + s.listening_score + s.speaking_score + s.writing_score
 
   return (
     <section style={S.section}>
@@ -323,34 +349,57 @@ function TOEFLScoreSection() {
         <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 400 }}>Baseado nos últimos simulados</span>
       </div>
 
-      <div style={T.grid}>
-        {MOCK_TOEFL.map(({ icon, label, score, max }) => (
-          <div key={label} style={{ ...T.card, background: scoreBg(score) }}>
-            <div style={T.cardTop}>
-              <span style={T.icon}>{icon}</span>
-              <span style={T.label}>{label}</span>
-            </div>
-            <div style={{ ...T.score, color: scoreColor(score) }}>
-              {score}<span style={T.max}>/{max}</span>
-            </div>
-            <div style={T.barTrack}>
-              <div style={{ ...T.barFill, width: `${(score / max) * 100}%`, background: scoreColor(score) }} />
-            </div>
+      {!hasData ? (
+        <div style={T.empty}>
+          <span style={{ fontSize: 28, marginBottom: 8 }}>🎯</span>
+          <p style={{ margin: 0, fontWeight: 600, color: '#334155', fontSize: 14 }}>Nenhum simulado realizado ainda</p>
+          <p style={{ margin: '4px 0 0', color: '#94A3B8', fontSize: 13 }}>Complete um Simulado TOEFL para ver sua estimativa de nota aqui.</p>
+        </div>
+      ) : (
+        <>
+          <div style={T.grid}>
+            {SECTIONS.map(({ icon, label, key }) => {
+              const score = s[key]
+              return (
+                <div key={label} style={{ ...T.card, background: scoreBg(score) }}>
+                  <div style={T.cardTop}>
+                    <span style={T.icon}>{icon}</span>
+                    <span style={T.label}>{label}</span>
+                  </div>
+                  <div style={{ ...T.score, color: scoreColor(score) }}>
+                    {score}<span style={T.max}>/30</span>
+                  </div>
+                  <div style={T.barTrack}>
+                    <div style={{ ...T.barFill, width: `${(score / 30) * 100}%`, background: scoreColor(score) }} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        ))}
-      </div>
-
-      <div style={T.totalRow}>
-        <span style={T.totalLabel}>Total estimado</span>
-        <span style={{ ...T.totalScore, color: scoreColor(total / 4) }}>
-          {total}<span style={{ fontSize: 16, fontWeight: 400, color: '#94A3B8' }}>/{totalMax}</span>
-        </span>
-      </div>
+          <div style={T.totalRow}>
+            <span style={T.totalLabel}>Total estimado</span>
+            <span style={{ ...T.totalScore, color: scoreColor(total / 4) }}>
+              {total}<span style={{ fontSize: 16, fontWeight: 400, color: '#94A3B8' }}>/120</span>
+            </span>
+          </div>
+        </>
+      )}
     </section>
   )
 }
 
 const T: Record<string, React.CSSProperties> = {
+  empty: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '32px 20px',
+    background: '#F8FAFC',
+    border: '1px dashed #CBD5E1',
+    borderRadius: 14,
+    textAlign: 'center',
+  },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
