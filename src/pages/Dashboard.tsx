@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { supabase, supabaseConfigured, type Content } from '../utils/supabase'
 
-const WEEK_GOAL = 70
 const PASSING = 80
 
 interface Stats {
@@ -20,6 +20,8 @@ interface ContentWithProgress extends Content {
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { settings } = useSettings()
+  const WEEK_GOAL = settings.metaGoal
   const [contents, setContents] = useState<ContentWithProgress[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, correct: 0, accuracy: 0, weekDone: 0 })
   const [currentContentId, setCurrentContentId] = useState<string | null>(null)
@@ -115,6 +117,9 @@ export default function Dashboard() {
           <span style={S.weekBarLabel}>{stats.weekDone} de {WEEK_GOAL} exercícios esta semana</span>
         </div>
       </section>
+
+      {/* Desempenho TOEFL */}
+      <TOEFLScoreSection />
 
       {/* Treino do dia */}
       <section style={S.section}>
@@ -286,6 +291,100 @@ const S: Record<string, React.CSSProperties> = {
     whiteSpace: 'nowrap',
   },
 }
+
+// ── TOEFL Score Section ──────────────────────────────────────
+const MOCK_TOEFL = [
+  { icon: '📖', label: 'Reading',   score: 24, max: 30 },
+  { icon: '🎧', label: 'Listening', score: 19, max: 30 },
+  { icon: '🗣️', label: 'Speaking',  score: 22, max: 30 },
+  { icon: '✍️', label: 'Writing',   score: 26, max: 30 },
+]
+
+function scoreColor(score: number): string {
+  if (score >= 26) return '#22C55E'
+  if (score >= 21) return '#F59E0B'
+  return '#EF4444'
+}
+
+function scoreBg(score: number): string {
+  if (score >= 26) return 'rgba(34,197,94,0.08)'
+  if (score >= 21) return 'rgba(245,158,11,0.08)'
+  return 'rgba(239,68,68,0.08)'
+}
+
+function TOEFLScoreSection() {
+  const total = MOCK_TOEFL.reduce((s, c) => s + c.score, 0)
+  const totalMax = MOCK_TOEFL.reduce((s, c) => s + c.max, 0)
+
+  return (
+    <section style={S.section}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+        <h2 style={S.sectionTitle}>Desempenho TOEFL (Estimativa)</h2>
+        <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 400 }}>Baseado nos últimos simulados</span>
+      </div>
+
+      <div style={T.grid}>
+        {MOCK_TOEFL.map(({ icon, label, score, max }) => (
+          <div key={label} style={{ ...T.card, background: scoreBg(score) }}>
+            <div style={T.cardTop}>
+              <span style={T.icon}>{icon}</span>
+              <span style={T.label}>{label}</span>
+            </div>
+            <div style={{ ...T.score, color: scoreColor(score) }}>
+              {score}<span style={T.max}>/{max}</span>
+            </div>
+            <div style={T.barTrack}>
+              <div style={{ ...T.barFill, width: `${(score / max) * 100}%`, background: scoreColor(score) }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={T.totalRow}>
+        <span style={T.totalLabel}>Total estimado</span>
+        <span style={{ ...T.totalScore, color: scoreColor(total / 4) }}>
+          {total}<span style={{ fontSize: 16, fontWeight: 400, color: '#94A3B8' }}>/{totalMax}</span>
+        </span>
+      </div>
+    </section>
+  )
+}
+
+const T: Record<string, React.CSSProperties> = {
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
+    gap: 12,
+    marginBottom: 14,
+  },
+  card: {
+    border: '1px solid #E2E8F0',
+    borderRadius: 14,
+    padding: '18px 20px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    boxShadow: '0 1px 4px rgba(15,23,42,0.05)',
+  },
+  cardTop: { display: 'flex', alignItems: 'center', gap: 7 },
+  icon: { fontSize: 16 },
+  label: { fontSize: 12, fontWeight: 600, color: '#475569' },
+  score: { fontSize: 34, fontWeight: 700, letterSpacing: '-1.5px', lineHeight: 1 },
+  max: { fontSize: 16, fontWeight: 400, color: '#CBD5E1', marginLeft: 1 },
+  barTrack: { height: 4, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 999, transition: 'width 0.5s ease' },
+  totalRow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'flex-end',
+    gap: 8,
+    paddingTop: 4,
+  },
+  totalLabel: { fontSize: 12, color: '#94A3B8', fontWeight: 500 },
+  totalScore: { fontSize: 26, fontWeight: 700, letterSpacing: '-1px' },
+}
+
+// ── Demo data ────────────────────────────────────────────────
 
 const DEMO_CONTENTS: ContentWithProgress[] = [
   { id: 'verbo-to-be',       name: 'Verbo TO BE',       level_id: 'A1', description: 'Ser, estar, identidade', order_number: 1 },

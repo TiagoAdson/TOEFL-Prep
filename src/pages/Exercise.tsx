@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { supabase, supabaseConfigured, type ExerciseItem } from '../utils/supabase'
 import { getFeedbackFromAI, type FeedbackResult } from '../utils/feedbackAI'
 import { getTheory, type ContentTheory } from '../utils/theoryData'
@@ -12,6 +13,7 @@ export default function Exercise() {
   const { contentId, block } = useParams<{ contentId: string; block: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { settings } = useSettings()
   const blockNum = parseInt(block || '1')
 
   const [exercises, setExercises] = useState<ExerciseItem[]>([])
@@ -93,6 +95,20 @@ export default function Exercise() {
           is_correct: result.correct,
           feedback_received: JSON.stringify(result),
         })
+
+        if (!result.correct) {
+          await supabase.from('mistake_journal').insert({
+            user_id: user.id,
+            content_id: contentId,
+            exercise_id: ex.id,
+            question: ex.question,
+            user_answer: userAnswer,
+            correct_answer: ex.answer,
+            ai_explanation: result.explanation,
+            is_resolved: false,
+            spaced_review_date: null,
+          })
+        }
       }
     } catch (err) {
       console.error(err)
@@ -173,7 +189,7 @@ export default function Exercise() {
               </div>
             ) : isProduction ? (
               <>
-                {isTOEFLHalf && <SpeakingTimer onExpire={handleSubmit} />}
+                {isTOEFLHalf && <SpeakingTimer duration={settings.timers.speaking} onExpire={handleSubmit} />}
                 <textarea
                   className="exercise-textarea"
                   value={userAnswer}
@@ -232,8 +248,8 @@ export default function Exercise() {
 }
 
 // ---------- Speaking / TOEFL timer (45s) ----------
-function SpeakingTimer({ onExpire }: { onExpire: () => void }) {
-  const [seconds, setSeconds] = useState(45)
+function SpeakingTimer({ duration, onExpire }: { duration: number; onExpire: () => void }) {
+  const [seconds, setSeconds] = useState(duration)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const expiredRef = useRef(false)
 
@@ -252,8 +268,8 @@ function SpeakingTimer({ onExpire }: { onExpire: () => void }) {
     return () => clearInterval(timerRef.current!)
   }, [])
 
-  const pct = (seconds / 45) * 100
-  const color = seconds <= 10 ? '#EF4444' : seconds <= 20 ? '#F59E0B' : '#22C55E'
+  const pct = (seconds / duration) * 100
+  const color = seconds <= 10 ? '#EF4444' : seconds <= Math.round(duration * 0.4) ? '#F59E0B' : '#22C55E'
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: '10px 14px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
@@ -270,7 +286,7 @@ function SpeakingTimer({ onExpire }: { onExpire: () => void }) {
       </div>
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Tempo TOEFL Speaking</div>
-        <div style={{ fontSize: 11, color: '#94A3B8' }}>45s · Sem colar texto · Responda em inglês</div>
+        <div style={{ fontSize: 11, color: '#94A3B8' }}>{duration}s · Sem colar texto · Responda em inglês</div>
       </div>
     </div>
   )
