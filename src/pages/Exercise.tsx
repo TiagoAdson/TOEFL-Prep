@@ -59,8 +59,8 @@ export default function Exercise() {
       const reviewExercises = all.filter(e => mistakeIds.has(e.id))
 
       const remaining = all.filter(e => !mistakeIds.has(e.id))
-      const grammar    = remaining.filter(e => e.type === 'gap_fill' || e.type === 'multiple_choice')
-      const production = remaining.filter(e => e.type === 'production')
+      const grammar = remaining.filter(e => !e.question.includes('[TOEFL]'))
+      const toefl   = remaining.filter(e => e.question.includes('[TOEFL]'))
 
       const pick = (arr: ExerciseItem[], n: number) =>
         [...arr].sort(() => Math.random() - 0.5).slice(0, n)
@@ -70,7 +70,7 @@ export default function Exercise() {
       const newSlots = DAILY_TOTAL - reviews.length
       const newGrammarCount = Math.min(GRAMMAR_HALF, Math.ceil(newSlots / 2))
       const g = pick(grammar, Math.min(newGrammarCount, grammar.length))
-      const t = pick(production, Math.min(newSlots - g.length, production.length))
+      const t = pick(toefl, Math.min(newSlots - g.length, toefl.length))
       const extra = (newSlots - g.length - t.length) > 0
         ? pick(grammar.filter(e => !g.includes(e)), newSlots - g.length - t.length)
         : []
@@ -202,14 +202,16 @@ export default function Exercise() {
         <p style={{ color: '#94A3B8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 8px', fontWeight: 600 }}>
           {ex?.type?.replace(/_/g, ' ')}
         </p>
-        <h3 style={{ fontSize: 20, lineHeight: 1.55, margin: '0 0 24px', color: '#0F172A', fontWeight: 500 }}>
-          {ex?.question}
-        </h3>
+        <div translate="no" className="notranslate" lang="en">
+          <h3 style={{ fontSize: 20, lineHeight: 1.55, margin: '0 0 24px', color: '#0F172A', fontWeight: 500 }}>
+            {ex?.question}
+          </h3>
+        </div>
 
         {!submitted ? (
           <>
             {ex?.type === 'multiple_choice' && ex.options ? (
-              <div className="options-list">
+              <div className="options-list" translate="no" className="notranslate" lang="en">
                 {ex.options.map((opt, idx) => (
                   <button key={idx}
                     className={`option-btn ${userAnswer === opt ? 'selected' : ''}`}
@@ -264,6 +266,7 @@ export default function Exercise() {
               <div className="feedback-content">
                 <p><strong>Explicação:</strong> {feedback?.explanation}</p>
                 {feedback?.rule    && <p><strong>Regra:</strong> {feedback.rule}</p>}
+                {feedback?.translation && <p><strong>Tradução:</strong> {feedback.translation}</p>}
                 {feedback?.example && <p><strong>Exemplo:</strong> {feedback.example}</p>}
               </div>
             </div>
@@ -330,7 +333,7 @@ function SpeakingTimer({ duration, onExpire }: { duration: number; onExpire: () 
 function ExerciseTheoryCard({ theory }: { theory: ContentTheory }) {
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ border: '1px solid #BFDBFE', borderRadius: 10, overflow: 'hidden', marginBottom: 20, background: 'white' }}>
+    <div style={{ position: 'sticky', top: 10, zIndex: 10, border: '1px solid #BFDBFE', borderRadius: 10, overflow: 'hidden', marginBottom: 20, background: 'white', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
       <button onClick={() => setOpen(!open)} style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 18px', background: open ? '#EFF6FF' : '#F8FAFF',
@@ -347,7 +350,7 @@ function ExerciseTheoryCard({ theory }: { theory: ContentTheory }) {
       </button>
       {open && (
         <div style={{ padding: '16px 20px', borderTop: '1px solid #DBEAFE' }}>
-          <p style={{ fontSize: 14, lineHeight: 1.7, color: '#374151', marginBottom: 14 }}>{theory.summary}</p>
+          <p style={{ fontSize: 14, lineHeight: 1.7, color: '#374151', marginBottom: 14, whiteSpace: 'pre-wrap' }}>{theory.summary}</p>
           <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 7, padding: '10px 14px', marginBottom: 14 }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#0369A1', textTransform: 'uppercase', letterSpacing: 0.8 }}>Estrutura</span>
             <p style={{ margin: '5px 0 0', fontWeight: 600, color: '#0C4A6E', fontSize: 13, fontFamily: 'monospace' }}>{theory.structure}</p>

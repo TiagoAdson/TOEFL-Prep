@@ -34,7 +34,7 @@ export const THEORY_MAP: Record<string, ContentTheory> = {
   'verbo-to-be': {
     title: 'Verbo TO BE',
     tagline: 'Ser e Estar em inglês',
-    summary: 'TO BE é o verbo mais fundamental do inglês. Ele expressa identidade (o que você é), profissão, origem, características e estados temporários.',
+    summary: 'TO BE é o verbo mais fundamental do inglês. Ele expressa identidade (o que você é), profissão, origem, características e estados temporários.\n\n🇬🇧 TO BE is the most fundamental verb in English. It expresses identity, profession, origin, characteristics, and temporary states.',
     structure: 'I am • You / We / They are • He / She / It is',
     examples: [
       { en: 'She is a doctor.', pt: 'Ela é médica.', label: 'Identidade / Profissão' },

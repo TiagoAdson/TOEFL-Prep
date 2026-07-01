@@ -14,6 +14,7 @@ export interface FeedbackResult {
   explanation: string
   example?: string
   rule?: string
+  translation?: string
 }
 
 export interface TOEFLSectionFeedback {
@@ -82,7 +83,7 @@ Pergunta: ${question}
 Resposta: ${userAnswer}
 Tipo: ${type}
 Responda SOMENTE JSON:
-{"correct":true,"message":"Elogio breve","explanation":"Regra em 1 linha","example":"Exemplo similar"}`
+{"correct":true,"message":"Elogio breve","explanation":"Regra em 1 linha","example":"Exemplo similar","translation":"Tradução da pergunta para o português"}`
     : `Voce e tutor de ingles TOEFL. Feedback CORRETIVO util.
 Pergunta: ${question}
 Resposta do aluno: ${userAnswer}
@@ -90,7 +91,7 @@ Resposta correta: ${correctAnswer}
 Tipo: ${type}
 ${explanation ? `Dica: ${explanation}` : ''}
 Responda SOMENTE JSON:
-{"correct":false,"message":"O que errou em 1 linha","explanation":"Por que esta errado","rule":"Regra correta","example":"Exemplo certo"}`
+{"correct":false,"message":"O que errou em 1 linha","explanation":"Por que esta errado","rule":"Regra correta","example":"Exemplo certo","translation":"Tradução da pergunta para o português"}`
 
   const text = await callClaude(prompt, 250)
   if (!text) return localExerciseFeedback(isCorrect, correctAnswer, explanation)

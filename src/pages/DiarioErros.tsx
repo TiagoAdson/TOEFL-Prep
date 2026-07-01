@@ -49,8 +49,9 @@ export default function DiarioErros() {
     const opening: ChatMsg = {
       role: 'ai',
       text: `📌 **Questão:** "${m.question}"\n\n` +
-        `Você respondeu **"${m.user_answer}"**, mas a resposta correta era **"${m.correct_answer}"**.\n\n` +
-        `Antes de eu explicar, me diga: *por que você escolheu essa resposta? Qual era o seu raciocínio?*`,
+        `Sua resposta: **"${m.user_answer}"**\n` +
+        `Resposta correta: **"${m.correct_answer}"**\n\n` +
+        `Escreva qualquer dúvida abaixo ou apenas clique em enviar para que eu te explique objetivamente por que essa é a resposta correta.`,
     }
     setChat([opening])
   }
@@ -80,18 +81,18 @@ export default function DiarioErros() {
         content: m.text,
       }))
 
-      const systemPrompt = `Você é um professor de inglês TOEFL que usa o Método Socrático.
-Um aluno errou uma questão e está explicando o raciocínio dele.
+      const systemPrompt = `Você é um professor particular de inglês focado em ser o mais claro e objetivo possível.
+O aluno errou a seguinte questão e quer entender o porquê.
 
 QUESTÃO: "${active.question}"
 RESPOSTA DO ALUNO: "${active.user_answer}" (INCORRETA)
 RESPOSTA CORRETA: "${active.correct_answer}"
 
 SEU PAPEL:
-1. Não dê a resposta de imediato — faça perguntas que guiem o aluno a descobrir o erro sozinho.
-2. Se o aluno demonstrar entendimento, elogie e explique o conceito com um exemplo.
-3. Na 3ª ou 4ª interação, consolide o aprendizado e diga "✅ Marca este erro como resolvido".
-4. Seja conciso, empático e em português.`
+1. Vá direto ao ponto. Explique de forma clara e objetiva por que a resposta do aluno está errada e por que a outra é a correta.
+2. Foque na regra gramatical ou de vocabulário, usando frases curtas e simples.
+3. Não use o método socrático e não faça perguntas abertas. Dê a resposta mastigada.
+4. Responda sempre em português, com tom prestativo e encorajador.`
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
