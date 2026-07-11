@@ -6,8 +6,8 @@
 DO $$
 DECLARE cid TEXT;
 BEGIN
-  SELECT id INTO cid FROM contents WHERE id = 'basic-modals';
-  IF cid IS NULL THEN RAISE EXCEPTION 'Módulo basic-modals não encontrado'; END IF;
+  SELECT id INTO cid FROM contents WHERE id = 'modais-basicos';
+  IF cid IS NULL THEN RAISE EXCEPTION 'Módulo modais-basicos não encontrado'; END IF;
 
   INSERT INTO exercises (content_id, block_number, exercise_number, type, question, answer, options, explanation, difficulty) VALUES
 
