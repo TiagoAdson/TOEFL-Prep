@@ -103,7 +103,7 @@ SEU PAPEL:
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-5',
           max_tokens: 400,
           system: systemPrompt,
           messages: [

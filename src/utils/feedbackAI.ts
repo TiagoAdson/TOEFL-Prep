@@ -40,7 +40,7 @@ async function callClaude(prompt: string, maxTokens = 400): Promise<string> {
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-5',
         max_tokens: maxTokens,
         messages: [{ role: 'user', content: prompt }],
       }),
