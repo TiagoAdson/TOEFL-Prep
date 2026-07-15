@@ -3,11 +3,39 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { supabase, supabaseConfigured, type ExerciseItem } from '../utils/supabase'
-import { getFeedbackFromAI, type FeedbackResult } from '../utils/feedbackAI'
+import { getFeedbackFromAI, getTOEFLSpeakingFeedback, getTOEFLWritingFeedback, type FeedbackResult, type TOEFLSectionFeedback } from '../utils/feedbackAI'
+import { evaluateSpeakingAudio, saveSpeakingAttempt, getSpeakingHistory, HAS_GEMINI } from '../utils/geminiAI'
+import { useAudioRecorder } from '../utils/useAudioRecorder'
 import { getTheory, type ContentTheory } from '../utils/theoryData'
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
 
-const DAILY_TOTAL  = 14
-const GRAMMAR_HALF = 7
+type Skill = 'reading' | 'listening' | 'speaking' | 'writing'
+const SKILLS: Skill[] = ['reading', 'listening', 'speaking', 'writing']
+const SKILL_LABELS: Record<Skill, string> = { reading: 'Reading', listening: 'Listening', speaking: 'Speaking', writing: 'Writing' }
+
+// ---------- Persist which skill-exercises the user already saw (per module) ----------
+function seenKey(contentId: string, skill: Skill) { return `meu-ingles-seen-${contentId}-${skill}` }
+
+function loadSeen(contentId: string, skill: Skill): Set<string> {
+  try {
+    const raw = localStorage.getItem(seenKey(contentId, skill))
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveSeen(contentId: string, skill: Skill, ids: Set<string>) {
+  try {
+    localStorage.setItem(seenKey(contentId, skill), JSON.stringify([...ids]))
+  } catch {
+    // localStorage indisponível (modo privado, quota cheia) — não é crítico, apenas ignora
+  }
+}
+
+function pick<T>(arr: T[], n: number): T[] {
+  return [...arr].sort(() => Math.random() - 0.5).slice(0, n)
+}
 
 export default function Exercise() {
   const { contentId, block } = useParams<{ contentId: string; block: string }>()
@@ -20,17 +48,80 @@ export default function Exercise() {
   const [current, setCurrent] = useState(0)
   const [userAnswer, setUserAnswer] = useState('')
   const [feedback, setFeedback] = useState<FeedbackResult | null>(null)
+  const [skillFeedback, setSkillFeedback] = useState<TOEFLSectionFeedback | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [score, setScore] = useState(0)
   const [pageLoading, setPageLoading] = useState(true)
 
-  useEffect(() => { loadExercises() }, [contentId, block])
+  const audio = useAudioRecorder()
+  const allExercisesRef = useRef<ExerciseItem[]>([])
+  const seenRef = useRef<Record<Skill, Set<string>>>({ reading: new Set(), listening: new Set(), speaking: new Set(), writing: new Set() })
 
-  // ---------- Load 14 exercises with spaced repetition ----------
-  const loadExercises = async () => {
+  // ---------- Save one answered exercise to user_progress / mistake_journal ----------
+  const saveProgress = useCallback(async (ex: ExerciseItem, isCorrect: boolean, userAns: string, correctAns: string, feedbackJson: string, correction?: string) => {
+    if (!user) return
+    await supabase.from('user_progress').insert({
+      user_id: user.id,
+      content_id: contentId,
+      block_number: blockNum,
+      exercise_number: current + 1,
+      exercise_id: ex.id,
+      user_answer: userAns,
+      correct_answer: correctAns,
+      is_correct: isCorrect,
+      feedback_received: feedbackJson,
+    })
+
+    const isRealExercise = ex.id && !ex.id.startsWith('d-')
+    if (isCorrect) {
+      if (isRealExercise) {
+        const nextReview = new Date(); nextReview.setDate(nextReview.getDate() + 3)
+        await supabase.from('mistake_journal')
+          .update({ is_resolved: true, spaced_review_date: nextReview.toISOString() })
+          .eq('user_id', user.id).eq('exercise_id', ex.id).eq('is_resolved', false)
+      }
+    } else {
+      const nextReview = new Date(); nextReview.setDate(nextReview.getDate() + 1)
+      await supabase.from('mistake_journal').insert({
+        user_id: user.id,
+        content_id: contentId,
+        exercise_id: isRealExercise ? ex.id : null,
+        question_text: ex.question,
+        question: ex.question,
+        user_answer: userAns,
+        correct_answer: correctAns,
+        ai_correction: correction,
+        is_resolved: false,
+        spaced_review_date: nextReview.toISOString(),
+      })
+    }
+  }, [user, contentId, blockNum, current])
+
+  // ---------- Pull skillsBatchSize more (or fewer, if the module's pool is smaller) of a skill ----------
+  const extendSkill = useCallback((skill: Skill): ExerciseItem[] => {
+    const cid = contentId || ''
+    const pool = allExercisesRef.current.filter(e => e.toefl_skill === skill)
+    if (pool.length === 0) return []
+
+    let unseen = pool.filter(e => !seenRef.current[skill].has(e.id))
+    if (unseen.length === 0) {
+      // Exhausted every item of this skill in this module — recycle so practice never dead-ends.
+      seenRef.current[skill] = new Set()
+      unseen = pool
+    }
+
+    const batch = pick(unseen, Math.min(settings.skillsBatchSize, unseen.length))
+    batch.forEach(e => seenRef.current[skill].add(e.id))
+    saveSeen(cid, skill, seenRef.current[skill])
+    return batch
+  }, [contentId, settings.skillsBatchSize])
+
+  // ---------- Load session: objective exercises + 4 skill batches ----------
+  const loadExercises = useCallback(async () => {
     setPageLoading(true)
-    setCurrent(0); setScore(0); setUserAnswer(''); setFeedback(null); setSubmitted(false)
+    setCurrent(0); setScore(0); setUserAnswer(''); setFeedback(null); setSkillFeedback(null); setSubmitted(false)
+    audio.reset()
 
     if (!supabaseConfigured) {
       setExercises(getDemoExercises(contentId || '', blockNum))
@@ -38,126 +129,160 @@ export default function Exercise() {
       return
     }
     try {
+      const cid = contentId || ''
       const [exercisesResult, mistakesResult] = await Promise.all([
-        supabase.from('exercises').select('*').eq('content_id', contentId).order('exercise_number'),
+        supabase.from('exercises').select('*').eq('content_id', cid).order('exercise_number'),
         user ? supabase
           .from('mistake_journal')
           .select('exercise_id, question_text')
           .eq('user_id', user.id)
-          .eq('content_id', contentId)
+          .eq('content_id', cid)
           .eq('is_resolved', false)
           .lte('spaced_review_date', new Date().toISOString())
           .limit(4) : Promise.resolve({ data: null }),
       ])
 
       const all = exercisesResult.data && exercisesResult.data.length > 0
-        ? exercisesResult.data
-        : getDemoExercises(contentId || '', blockNum)
+        ? exercisesResult.data as ExerciseItem[]
+        : getDemoExercises(cid, blockNum)
 
-      // Spaced repetition: exercises from mistake_journal que estão vencidos
+      allExercisesRef.current = all
+      SKILLS.forEach(s => { seenRef.current[s] = loadSeen(cid, s) })
+
+      // ---- Objective pool (toefl_skill IS NULL) with spaced-repetition review ----
       const mistakeIds = new Set((mistakesResult.data || []).map(m => m.exercise_id).filter(Boolean))
-      const reviewExercises = all.filter(e => mistakeIds.has(e.id))
+      const objectivePool = all.filter(e => !e.toefl_skill)
+      const reviewExercises = objectivePool.filter(e => mistakeIds.has(e.id))
+      const remaining = objectivePool.filter(e => !mistakeIds.has(e.id))
 
-      const remaining = all.filter(e => !mistakeIds.has(e.id))
-      const grammar = remaining.filter(e => !e.question.includes('[TOEFL]'))
-      const toefl   = remaining.filter(e => e.question.includes('[TOEFL]'))
-
-      const pick = (arr: ExerciseItem[], n: number) =>
-        [...arr].sort(() => Math.random() - 0.5).slice(0, n)
-
-      // Até 4 exercícios de revisão, resto completa com novos
       const reviews = pick(reviewExercises, Math.min(4, reviewExercises.length))
-      const newSlots = DAILY_TOTAL - reviews.length
-      const newGrammarCount = Math.min(GRAMMAR_HALF, Math.ceil(newSlots / 2))
-      const g = pick(grammar, Math.min(newGrammarCount, grammar.length))
-      const t = pick(toefl, Math.min(newSlots - g.length, toefl.length))
-      const extra = (newSlots - g.length - t.length) > 0
-        ? pick(grammar.filter(e => !g.includes(e)), newSlots - g.length - t.length)
-        : []
+      const newSlots = Math.max(0, settings.dailyObjectiveCount - reviews.length)
+      const objectives = [...reviews, ...pick(remaining, Math.min(newSlots, remaining.length))]
 
-      setExercises([...reviews, ...g, ...t, ...extra])
+      // ---- 4 skill batches ----
+      const skillBatches = SKILLS.map(s => extendSkill(s))
+
+      setExercises([...objectives, ...skillBatches.flat()])
     } catch {
       setExercises(getDemoExercises(contentId || '', blockNum))
     } finally {
       setPageLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only audio.reset (stable via useCallback) is needed, not the whole audio object
+  }, [contentId, blockNum, user, settings.dailyObjectiveCount, extendSkill, audio.reset])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on mount/param change, not a render-time state sync
+  useEffect(() => { loadExercises() }, [loadExercises])
+
+  function resetAnswerState() {
+    setUserAnswer(''); setFeedback(null); setSkillFeedback(null); setSubmitted(false)
+    audio.reset()
   }
 
-  // ---------- Submit ----------
-  const handleSubmit = useCallback(async () => {
-    if (!userAnswer.trim()) return
-    setLoading(true)
-    const ex = exercises[current]
-    try {
-      const result = await getFeedbackFromAI({
-        question: ex.question,
-        userAnswer,
-        correctAnswer: ex.answer,
-        type: ex.type,
-        explanation: ex.explanation,
-      })
-      setFeedback(result)
-      setSubmitted(true)
-      if (result.correct) setScore(s => s + 1)
+  // ---------- Submit: objective (exact match) ----------
+  const submitObjective = useCallback(async (ex: ExerciseItem) => {
+    const result = await getFeedbackFromAI({
+      question: ex.question,
+      userAnswer,
+      correctAnswer: ex.answer,
+      type: ex.type,
+      explanation: ex.explanation,
+    })
+    setFeedback(result)
+    if (result.correct) setScore(s => s + 1)
 
-      if (supabaseConfigured && user) {
-        await supabase.from('user_progress').insert({
-          user_id: user.id,
-          content_id: contentId,
-          block_number: blockNum,
-          exercise_number: current + 1,
-          exercise_id: ex.id,
-          user_answer: userAnswer,
-          correct_answer: ex.answer,
-          is_correct: result.correct,
-          feedback_received: JSON.stringify(result),
-        })
+    if (supabaseConfigured && user) {
+      await saveProgress(ex, result.correct, userAnswer, ex.answer, JSON.stringify(result), result.explanation)
+    }
+  }, [userAnswer, user, saveProgress])
 
-        if (result.correct) {
-          // Marcar como resolvido se existia no diário de erros
-          const isRealExercise = ex.id && !ex.id.startsWith('d-')
-          if (isRealExercise) {
-            const nextReview = new Date()
-            nextReview.setDate(nextReview.getDate() + 3) // próxima revisão em 3 dias
-            await supabase.from('mistake_journal')
-              .update({ is_resolved: true, spaced_review_date: nextReview.toISOString() })
-              .eq('user_id', user.id)
-              .eq('exercise_id', ex.id)
-              .eq('is_resolved', false)
-          }
-        } else {
-          const isRealExercise = ex.id && !ex.id.startsWith('d-')
-          // Calcular próxima data de revisão espaçada
-          const nextReview = new Date()
-          nextReview.setDate(nextReview.getDate() + 1) // revisão amanhã por padrão
-          await supabase.from('mistake_journal').insert({
-            user_id:        user.id,
-            content_id:     contentId,
-            exercise_id:    isRealExercise ? ex.id : null,
-            question_text:  ex.question,
-            question:       ex.question,
-            user_answer:    userAnswer,
-            correct_answer: ex.answer,
-            ai_correction:  result.explanation,
-            is_resolved:    false,
-            spaced_review_date: nextReview.toISOString(),
+  // ---------- Submit: speaking (audio) or writing (text) — TOEFL-style scoring ----------
+  const submitSkillProduction = useCallback(async (ex: ExerciseItem) => {
+    let sf: TOEFLSectionFeedback
+    let answerForLog = userAnswer
+
+    if (ex.toefl_skill === 'speaking') {
+      if (audio.audioBlob && HAS_GEMINI) {
+        const history = user ? await getSpeakingHistory(user.id, contentId || '') : []
+        const gem = await evaluateSpeakingAudio(audio.audioBlob, ex.question, history)
+        sf = {
+          score: Math.round(gem.score * 7.5),
+          level: gem.score >= 4 ? 'Excelente' : gem.score >= 3 ? 'Avancado' : gem.score >= 2 ? 'Intermediario' : 'Basico',
+          strengths: gem.strengths,
+          improvements: gem.improvements,
+          tips: gem.feedback,
+        }
+        answerForLog = gem.transcript || '[áudio gravado]'
+
+        if (user) {
+          await saveSpeakingAttempt({
+            userId: user.id,
+            contentId: contentId || '',
+            exerciseId: ex.id && !ex.id.startsWith('d-') ? ex.id : null,
+            task: ex.question,
+            result: gem,
+            audioBlob: audio.audioBlob,
           })
         }
+      } else {
+        sf = await getTOEFLSpeakingFeedback(ex.question, userAnswer || '(sem resposta)')
       }
+    } else {
+      sf = await getTOEFLWritingFeedback(ex.question, userAnswer)
+    }
+
+    setSkillFeedback(sf)
+    const isGood = sf.score >= 18
+    if (isGood) setScore(s => s + 1)
+
+    if (supabaseConfigured && user) {
+      await saveProgress(ex, isGood, answerForLog, '', JSON.stringify(sf), sf.improvements)
+    }
+  }, [userAnswer, audio.audioBlob, user, contentId, saveProgress])
+
+  const handleSubmit = useCallback(async () => {
+    const ex = exercises[current]
+    const isSkillProduction = ex?.type === 'production' && (ex.toefl_skill === 'speaking' || ex.toefl_skill === 'writing')
+    const canSubmitSkill = isSkillProduction && ex.toefl_skill === 'speaking' ? !!audio.audioBlob || userAnswer.trim().length > 0 : userAnswer.trim().length > 0
+
+    if (!isSkillProduction && !userAnswer.trim()) return
+    if (isSkillProduction && !canSubmitSkill) return
+
+    setLoading(true)
+    try {
+      if (isSkillProduction) await submitSkillProduction(ex)
+      else await submitObjective(ex)
+      setSubmitted(true)
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
     }
-  }, [userAnswer, exercises, current, user, contentId, blockNum])
+  }, [exercises, current, userAnswer, audio.audioBlob, submitObjective, submitSkillProduction])
 
-  // ---------- Next ----------
+  // ---------- Next — auto-extends the skill batch the user just finished ----------
   const handleNext = () => {
+    const ex = exercises[current]
+    const isLastOfArray = current === exercises.length - 1
+    const nextIsDifferentSkill = !isLastOfArray && exercises[current + 1]?.toefl_skill !== ex?.toefl_skill
+
+    if (ex?.toefl_skill && (isLastOfArray || nextIsDifferentSkill)) {
+      const more = extendSkill(ex.toefl_skill)
+      if (more.length > 0) {
+        setExercises(prev => {
+          const next = [...prev]
+          next.splice(current + 1, 0, ...more)
+          return next
+        })
+        setCurrent(c => c + 1)
+        resetAnswerState()
+        return
+      }
+    }
+
     if (current < exercises.length - 1) {
       setCurrent(c => c + 1)
-      setUserAnswer('')
-      setFeedback(null)
-      setSubmitted(false)
+      resetAnswerState()
     } else {
       navigate('/')
     }
@@ -166,10 +291,17 @@ export default function Exercise() {
   if (pageLoading) return <div className="loading">Carregando exercícios...</div>
 
   const ex = exercises[current]
+  const skill = ex?.toefl_skill as Skill | undefined
   const pct = Math.round(((current + (submitted ? 1 : 0)) / exercises.length) * 100)
   const theory = getTheory(contentId || '')
   const isProduction = ex?.type === 'production'
-  const isTOEFLHalf = current >= GRAMMAR_HALF
+  const isSkillProduction = isProduction && (skill === 'speaking' || skill === 'writing')
+  const badgeLabel = skill ? SKILL_LABELS[skill] : 'Gramática'
+  const minWords = (() => {
+    const m = ex?.question?.match(/(\d+)\s*words?/i)
+    return m ? Math.min(250, Math.max(20, parseInt(m[1]))) : 30
+  })()
+  const wordCount = userAnswer.trim().split(/\s+/).filter(Boolean).length
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -183,10 +315,10 @@ export default function Exercise() {
           </h2>
           <span style={{
             fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999,
-            background: isTOEFLHalf ? 'rgba(79,70,229,0.1)' : 'rgba(245,158,11,0.1)',
-            color: isTOEFLHalf ? '#4F46E5' : '#92400E',
+            background: skill ? 'rgba(79,70,229,0.1)' : 'rgba(245,158,11,0.1)',
+            color: skill ? '#4F46E5' : '#92400E',
           }}>
-            {isTOEFLHalf ? 'TOEFL' : 'Gramática'}
+            {badgeLabel}
           </span>
         </div>
         <p style={{ margin: '0 0 10px', color: '#94A3B8', fontSize: 13 }}>
@@ -203,15 +335,30 @@ export default function Exercise() {
           {ex?.type?.replace(/_/g, ' ')}
         </p>
         <div translate="no" className="notranslate" lang="en">
-          <h3 style={{ fontSize: 20, lineHeight: 1.55, margin: '0 0 24px', color: '#0F172A', fontWeight: 500 }}>
+          <h3 style={{ fontSize: 20, lineHeight: 1.55, margin: '0 0 8px', color: '#0F172A', fontWeight: 500 }}>
             {ex?.question}
           </h3>
         </div>
 
+        {skill === 'listening' && (
+          <button
+            type="button"
+            onClick={() => {
+              TextToSpeech.speak({
+                text: ex.question.replace(/^\[TOEFL Listening\]\s*/i, ''),
+                lang: 'en-US',
+              })
+            }}
+            style={{ marginBottom: 20, padding: '8px 16px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            🔊 Ouvir
+          </button>
+        )}
+
         {!submitted ? (
           <>
             {ex?.type === 'multiple_choice' && ex.options ? (
-              <div className="options-list" translate="no" className="notranslate" lang="en">
+              <div className="options-list" translate="no" lang="en">
                 {ex.options.map((opt, idx) => (
                   <button key={idx}
                     className={`option-btn ${userAnswer === opt ? 'selected' : ''}`}
@@ -223,9 +370,38 @@ export default function Exercise() {
                   </button>
                 ))}
               </div>
-            ) : isProduction ? (
+            ) : skill === 'speaking' ? (
+              <div style={{ marginBottom: 16 }}>
+                {HAS_GEMINI ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                    <button
+                      type="button"
+                      onClick={audio.recording ? audio.stopRecording : audio.startRecording}
+                      style={{
+                        width: 56, height: 56, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                        background: audio.recording ? '#EF4444' : '#4F46E5', color: 'white', fontSize: 22, flexShrink: 0,
+                      }}
+                    >
+                      {audio.recording ? '■' : '🎤'}
+                    </button>
+                    <div style={{ fontSize: 13, color: '#64748B' }}>
+                      {audio.recording ? 'Gravando... clique para parar.' : audio.audioBlob ? '✓ Áudio gravado. Pode confirmar ou gravar de novo.' : 'Clique no microfone e responda em inglês (até 45s).'}
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
+                    className="exercise-textarea"
+                    value={userAnswer}
+                    onChange={e => setUserAnswer(e.target.value)}
+                    onPaste={e => e.preventDefault()}
+                    spellCheck={false}
+                    placeholder="Configure VITE_GEMINI_API_KEY para gravar áudio. Por enquanto, escreva o que você diria em inglês..."
+                    rows={5}
+                  />
+                )}
+              </div>
+            ) : skill === 'writing' ? (
               <>
-                {isTOEFLHalf && <SpeakingTimer duration={settings.timers.speaking} onExpire={handleSubmit} />}
                 <textarea
                   className="exercise-textarea"
                   value={userAnswer}
@@ -234,10 +410,25 @@ export default function Exercise() {
                   spellCheck={false}
                   autoCorrect="off"
                   autoCapitalize="off"
-                  placeholder="Write your answer in English..."
-                  rows={5}
+                  placeholder={`Write at least ${minWords} words in English...`}
+                  rows={8}
                 />
+                <p style={{ fontSize: 12, color: wordCount >= minWords ? '#22C55E' : '#94A3B8', margin: '4px 0 16px' }}>
+                  {wordCount} / {minWords} palavras mínimas
+                </p>
               </>
+            ) : isProduction ? (
+              <textarea
+                className="exercise-textarea"
+                value={userAnswer}
+                onChange={e => setUserAnswer(e.target.value)}
+                onPaste={e => e.preventDefault()}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                placeholder="Write your answer in English..."
+                rows={5}
+              />
             ) : (
               <input
                 className="exercise-input"
@@ -254,8 +445,22 @@ export default function Exercise() {
             )}
 
             <button className="btn-primary" onClick={handleSubmit}
-              disabled={!userAnswer.trim() || loading}>
+              disabled={loading || (skill === 'writing' ? wordCount < minWords : skill === 'speaking' ? (!audio.audioBlob && !userAnswer.trim()) : !userAnswer.trim())}>
               {loading ? 'Avaliando...' : 'Confirmar Resposta'}
+            </button>
+          </>
+        ) : isSkillProduction && skillFeedback ? (
+          <>
+            <div className={`feedback-panel ${skillFeedback.score >= 18 ? 'correct' : 'incorrect'}`}>
+              <h4>Nota: {skillFeedback.score}/30 — {skillFeedback.level}</h4>
+              <div className="feedback-content">
+                <p><strong>Pontos fortes:</strong> {skillFeedback.strengths}</p>
+                <p><strong>Melhorar:</strong> {skillFeedback.improvements}</p>
+                <p><strong>Dica:</strong> {skillFeedback.tips}</p>
+              </div>
+            </div>
+            <button className="btn-primary" onClick={handleNext}>
+              {current < exercises.length - 1 ? 'Próxima Questão →' : 'Concluir Treino do Dia ✓'}
             </button>
           </>
         ) : (
@@ -279,51 +484,6 @@ export default function Exercise() {
 
       <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
         Acurácia: {Math.round((score / Math.max(1, current + (submitted ? 1 : 0))) * 100)}%
-      </div>
-    </div>
-  )
-}
-
-// ---------- Speaking / TOEFL timer (45s) ----------
-function SpeakingTimer({ duration, onExpire }: { duration: number; onExpire: () => void }) {
-  const [seconds, setSeconds] = useState(duration)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const expiredRef = useRef(false)
-
-  useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setSeconds(s => {
-        if (s <= 1 && !expiredRef.current) {
-          expiredRef.current = true
-          clearInterval(timerRef.current!)
-          setTimeout(onExpire, 0)
-          return 0
-        }
-        return s - 1
-      })
-    }, 1000)
-    return () => clearInterval(timerRef.current!)
-  }, [])
-
-  const pct = (seconds / duration) * 100
-  const color = seconds <= 10 ? '#EF4444' : seconds <= Math.round(duration * 0.4) ? '#F59E0B' : '#22C55E'
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: '10px 14px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
-      <div style={{ width: 40, height: 40, position: 'relative', flexShrink: 0 }}>
-        <svg viewBox="0 0 40 40" style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx="20" cy="20" r="16" fill="none" stroke="#E2E8F0" strokeWidth="3" />
-          <circle cx="20" cy="20" r="16" fill="none" stroke={color} strokeWidth="3"
-            strokeDasharray={`${2 * Math.PI * 16 * pct / 100} ${2 * Math.PI * 16}`}
-            style={{ transition: 'stroke-dasharray 1s linear, stroke 0.3s' }} />
-        </svg>
-        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color }}>
-          {seconds}
-        </span>
-      </div>
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>Tempo TOEFL Speaking</div>
-        <div style={{ fontSize: 11, color: '#94A3B8' }}>{duration}s · Sem colar texto · Responda em inglês</div>
       </div>
     </div>
   )
@@ -392,14 +552,17 @@ function getDemoExercises(contentId: string, block: number): ExerciseItem[] {
     { id: `d-g6-${block}`, content_id: contentId, block_number: block, exercise_number: 6, difficulty: 'medium', question: 'We ___ students.', answer: 'are', type: 'gap_fill', explanation: 'We (plural) = ARE' },
     { id: `d-g7-${block}`, content_id: contentId, block_number: block, exercise_number: 7, difficulty: 'medium', question: 'It ___ cold today.', answer: 'is', type: 'gap_fill', explanation: 'It (3ª singular neutra) = IS' },
   ]
-  const toefl: ExerciseItem[] = [
-    { id: `d-t1-${block}`, content_id: contentId, block_number: block, exercise_number: 8,  difficulty: 'medium', question: '[TOEFL Speaking] Describe a place that is important to you and explain why. Speak for 45 seconds.', answer: '', type: 'production', explanation: 'Use connectors: because, therefore, however.' },
-    { id: `d-t2-${block}`, content_id: contentId, block_number: block, exercise_number: 9,  difficulty: 'medium', question: '[TOEFL Writing] Write 2-3 sentences using the verb TO BE in an academic context.', answer: '', type: 'production', explanation: 'Use academic vocabulary and formal tone.' },
-    { id: `d-t3-${block}`, content_id: contentId, block_number: block, exercise_number: 10, difficulty: 'hard',   question: '[TOEFL] Complete: The results of the experiment ___ conclusive.', answer: 'are', type: 'gap_fill', explanation: '"Results" is plural → ARE' },
-    { id: `d-t4-${block}`, content_id: contentId, block_number: block, exercise_number: 11, difficulty: 'hard',   question: '[TOEFL] In academic writing, "is" is used with which subject?', answer: 'The research', type: 'multiple_choice', explanation: 'Singular noun + IS', options: ['The researchers', 'The studies', 'The research', 'The findings'] },
-    { id: `d-t5-${block}`, content_id: contentId, block_number: block, exercise_number: 12, difficulty: 'hard',   question: '[TOEFL Production] Write one academic sentence using "are" to describe a research finding.', answer: '', type: 'production', explanation: 'Example: "The data are consistent with the hypothesis."' },
-    { id: `d-t6-${block}`, content_id: contentId, block_number: block, exercise_number: 13, difficulty: 'hard',   question: '[TOEFL] The phenomenon ___ not yet fully understood by scientists.', answer: 'is', type: 'gap_fill', explanation: '"phenomenon" is singular → IS' },
-    { id: `d-t7-${block}`, content_id: contentId, block_number: block, exercise_number: 14, difficulty: 'hard',   question: '[TOEFL Speaking] Do you think technology makes people more or less connected? Explain with two examples.', answer: '', type: 'production', explanation: 'Structure: Claim → Example 1 → Example 2 → Conclusion' },
+  const reading: ExerciseItem[] = [
+    { id: `d-r1-${block}`, content_id: contentId, block_number: block, exercise_number: 8, difficulty: 'medium', question: '[TOEFL Reading] "The verb TO BE is among the most irregular in English, changing form for almost every subject pronoun." What does this sentence emphasize?', answer: 'The high degree of irregularity of TO BE.', type: 'multiple_choice', options: ['The high degree of irregularity of TO BE.', 'That TO BE has no irregular forms.', 'That TO BE only changes in the past.', 'That pronouns are irregular.'], explanation: 'A frase destaca a irregularidade do TO BE.', toefl_skill: 'reading' },
   ]
-  return [...grammar, ...toefl]
+  const listening: ExerciseItem[] = [
+    { id: `d-l1-${block}`, content_id: contentId, block_number: block, exercise_number: 9, difficulty: 'medium', question: '[TOEFL Listening] A professor says: "Remember, we are meeting tomorrow, not today." What is true tomorrow?', answer: 'There is a meeting.', type: 'multiple_choice', options: ['There is a meeting.', 'There is no meeting.', 'The meeting was cancelled.', 'The meeting already happened.'], explanation: '"We are meeting tomorrow" = presente contínuo com valor de futuro.', toefl_skill: 'listening' },
+  ]
+  const speaking: ExerciseItem[] = [
+    { id: `d-s1-${block}`, content_id: contentId, block_number: block, exercise_number: 10, difficulty: 'medium', question: '[TOEFL Speaking] Describe yourself in a few sentences using the verb TO BE (I am, I am not, I am from...).', answer: '', type: 'production', explanation: 'Use I am / I am not / I am from.', toefl_skill: 'speaking' },
+  ]
+  const writing: ExerciseItem[] = [
+    { id: `d-w1-${block}`, content_id: contentId, block_number: block, exercise_number: 11, difficulty: 'medium', question: '[TOEFL Writing] Write at least 30 words describing your city using TO BE at least 3 times.', answer: '', type: 'production', explanation: 'Use is/are para descrever lugares.', toefl_skill: 'writing' },
+  ]
+  return [...grammar, ...reading, ...listening, ...speaking, ...writing]
 }

@@ -4,8 +4,9 @@ import { supabase, supabaseConfigured } from '../utils/supabase'
 
 interface Profile {
   id: string
-  full_name: string | null
-  role: 'student' | 'tutor'
+  user_id: string
+  name: string | null
+  role: 'student' | 'tutor' | 'admin'
 }
 
 interface AuthContextType {
@@ -44,10 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function fetchProfile(userId: string) {
+    // Nota: este projeto Supabase é compartilhado com outro app (family-finance-hub),
+    // cuja tabela `profiles` usa `user_id` como chave para auth.users (não `id`, que é o PK da própria linha).
     const { data } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
+      .eq('user_id', userId)
       .single()
     setProfile(data)
     setLoading(false)

@@ -13,6 +13,9 @@ export interface AppSettings {
   darkMode:    boolean
   timers:      TOEFLTimers
   tutorId:     string
+  dailyObjectiveCount: number  // gap_fill/multiple_choice exercises per daily session
+  skillsBatchSize:     number  // exercises PER skill (Reading, Listening, Speaking, Writing each) per batch —
+                               // when the user finishes a skill's batch, the app loads +skillsBatchSize more of that skill
 }
 
 const DEFAULTS: AppSettings = {
@@ -21,6 +24,8 @@ const DEFAULTS: AppSettings = {
   darkMode:    false,
   timers: { speaking: 45, writing: 1800, reading: 900, listening: 600 },
   tutorId: '',
+  dailyObjectiveCount: 7,
+  skillsBatchSize:     7,
 }
 
 const OFFICIAL: TOEFLTimers = { speaking: 45, writing: 1800, reading: 900, listening: 600 }

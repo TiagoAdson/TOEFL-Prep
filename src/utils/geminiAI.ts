@@ -1,23 +1,56 @@
-// Gemini 1.5 Flash — TOEFL Speaking audio evaluator
+// Gemini 1.5 Flash — TOEFL Speaking audio evaluator + speaking history/memory
+
+import { supabase, supabaseConfigured } from './supabase'
 
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
 export const HAS_GEMINI = !!GEMINI_KEY && !GEMINI_KEY.includes('seu-key')
 
 export interface GeminiSpeakingResult {
-  score:    number   // 1-4 (ETS rubric)
-  feedback: string
-  strengths: string
+  score:      number   // 1-4 (ETS rubric)
+  transcript: string   // what the student actually said, transcribed by Gemini
+  feedback:   string
+  strengths:  string
   improvements: string
+}
+
+export interface SpeakingHistoryEntry {
+  id: string
+  task: string
+  transcript: string | null
+  score: number | null
+  improvements: string | null
+  created_at: string
+  audio_path: string | null
+  audio_size_bytes: number | null
+}
+
+// ---- Fetch the last N attempts for this task/module, so Gemini can "remember" past mistakes ----
+export async function getSpeakingHistory(userId: string, contentId: string, limit = 5): Promise<SpeakingHistoryEntry[]> {
+  if (!supabaseConfigured) return []
+  const { data } = await supabase
+    .from('speaking_history')
+    .select('id, task, transcript, score, improvements, created_at, audio_path, audio_size_bytes')
+    .eq('user_id', userId)
+    .eq('content_id', contentId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  return (data as SpeakingHistoryEntry[]) || []
 }
 
 export async function evaluateSpeakingAudio(
   audioBlob: Blob,
-  task: string
+  task: string,
+  history: SpeakingHistoryEntry[] = []
 ): Promise<GeminiSpeakingResult> {
   if (!HAS_GEMINI) return fallbackScore()
 
   const base64 = await blobToBase64(audioBlob)
   const mimeType = audioBlob.type || 'audio/webm'
+
+  const historyBlock = history.length > 0
+    ? `\n\nPast attempts by this student on this task/module (most recent first) — use these to note improvement or repeated mistakes:\n` +
+      history.map((h, i) => `${i + 1}. (${new Date(h.created_at).toLocaleDateString()}) said: "${h.transcript || '(no transcript)'}" — score ${h.score}/30 — needed to improve: ${h.improvements || 'n/a'}`).join('\n')
+    : ''
 
   const systemPrompt = `You are an official ETS evaluator for the TOEFL iBT Speaking section.
 RULES:
@@ -25,11 +58,15 @@ RULES:
 - Penalize ONLY: long hesitations (3+ seconds), unnatural pauses, loss of fluency, unintelligibility.
 - Score using the official ETS rubric: 1 (poor) to 4 (excellent).
 - Task: "${task}"
+- Transcribe exactly what the student said (in English, as spoken, including errors — do not correct grammar in the transcript).
+${historyBlock ? '- Compare this attempt with the past attempts listed below: explicitly say if the student improved, fixed a repeated mistake, or made the same mistake again.' : ''}
+${historyBlock}
 
 Evaluate the audio and respond ONLY in valid JSON:
 {
   "score": <1|2|3|4>,
-  "feedback": "Overall evaluation in English (2-3 sentences)",
+  "transcript": "Exact transcription of what the student said",
+  "feedback": "Overall evaluation in English (2-3 sentences), mentioning progress vs past attempts if any were provided",
   "strengths": "What the speaker did well",
   "improvements": "Specific areas to improve for TOEFL"
 }`
@@ -48,7 +85,7 @@ Evaluate the audio and respond ONLY in valid JSON:
               { inline_data: { mime_type: mimeType, data: base64 } },
             ],
           }],
-          generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 400 },
+          generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 500 },
         }),
       }
     )
@@ -63,9 +100,51 @@ Evaluate the audio and respond ONLY in valid JSON:
   }
 }
 
+// ---- Upload the audio + save transcript/score/apontamentos to speaking_history ----
+export async function saveSpeakingAttempt(params: {
+  userId: string
+  contentId: string
+  exerciseId?: string | null
+  task: string
+  result: GeminiSpeakingResult
+  audioBlob?: Blob | null
+}): Promise<void> {
+  const { userId, contentId, exerciseId, task, result, audioBlob } = params
+  if (!supabaseConfigured) return
+
+  let audioPath: string | null = null
+  let audioSize: number | null = null
+
+  if (audioBlob) {
+    const path = `${userId}/${Date.now()}.webm`
+    const { error } = await supabase.storage.from('speaking-audio').upload(path, audioBlob, {
+      contentType: audioBlob.type || 'audio/webm',
+    })
+    if (!error) {
+      audioPath = path
+      audioSize = audioBlob.size
+    }
+  }
+
+  await supabase.from('speaking_history').insert({
+    user_id: userId,
+    content_id: contentId,
+    exercise_id: exerciseId || null,
+    task,
+    transcript: result.transcript,
+    score: Math.round(result.score * 7.5), // normalize 1-4 ETS -> /30
+    feedback: result.feedback,
+    strengths: result.strengths,
+    improvements: result.improvements,
+    audio_path: audioPath,
+    audio_size_bytes: audioSize,
+  })
+}
+
 function fallbackScore(): GeminiSpeakingResult {
   return {
     score: 0,
+    transcript: '',
     feedback: 'Configure VITE_GEMINI_API_KEY no .env para ativar avaliação de áudio.',
     strengths: '',
     improvements: '',

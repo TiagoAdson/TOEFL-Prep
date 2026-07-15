@@ -62,6 +62,7 @@ export interface ExerciseItem {
   type: 'gap_fill' | 'multiple_choice' | 'error_spotting' | 'production' | 'reading';
   options?: string[];
   difficulty?: 'easy' | 'medium' | 'hard';
+  toefl_skill?: 'reading' | 'listening' | 'speaking' | 'writing' | null;
 }
 
 export interface UserProgress {

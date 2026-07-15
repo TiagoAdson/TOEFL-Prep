@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, supabaseConfigured } from '../utils/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { evaluateSpeakingAudio, HAS_GEMINI } from '../utils/geminiAI'
+import { useAudioRecorder } from '../utils/useAudioRecorder'
 import {
   getTOEFLReadingFeedback,
   getTOEFLListeningFeedback,
@@ -416,15 +417,21 @@ function SectionSpeaking({ onFinish }: { onFinish: (r: SectionResult) => void })
   const [timeLeft, setTimeLeft] = useState(45)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Audio recording state
+  // Audio recording state (shared hook — also used by Exercise.tsx daily Speaking practice)
   const [useAudio, setUseAudio] = useState(HAS_GEMINI)
-  const [recording, setRecording] = useState(false)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
-  const mediaRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const { recording, audioBlob, startRecording, stopRecording, reset } = useAudioRecorder()
 
   const wordCount = response.trim().split(/\s+/).filter(Boolean).length
   const canSubmit = useAudio ? !!audioBlob : wordCount >= 10
+
+  async function handleMicClick() {
+    if (recording) { stopRecording(); return }
+    const started = await startRecording()
+    if (!started) {
+      alert('Permissão de microfone negada. Use o modo texto como alternativa.')
+      setUseAudio(false)
+    }
+  }
 
   useEffect(() => {
     if (phase !== 'answering') return
@@ -440,31 +447,6 @@ function SectionSpeaking({ onFinish }: { onFinish: (r: SectionResult) => void })
     }, 1000)
     return () => clearInterval(timerRef.current!)
   }, [phase, recording])
-
-  async function startRecording() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
-      chunksRef.current = []
-      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        setAudioBlob(blob)
-        stream.getTracks().forEach(t => t.stop())
-      }
-      mr.start()
-      mediaRef.current = mr
-      setRecording(true)
-    } catch {
-      alert('Permissão de microfone negada. Use o modo texto como alternativa.')
-      setUseAudio(false)
-    }
-  }
-
-  function stopRecording() {
-    mediaRef.current?.stop()
-    setRecording(false)
-  }
 
   const handleSubmit = async () => {
     clearInterval(timerRef.current!)
@@ -531,7 +513,7 @@ function SectionSpeaking({ onFinish }: { onFinish: (r: SectionResult) => void })
             <>
               <div style={{ fontSize: 36, marginBottom: 12 }}>{recording ? '🔴' : '🎙'}</div>
               <button
-                onClick={recording ? stopRecording : startRecording}
+                onClick={handleMicClick}
                 style={{
                   padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer',
                   fontFamily: 'inherit', fontWeight: 600, fontSize: 14,
@@ -546,7 +528,7 @@ function SectionSpeaking({ onFinish }: { onFinish: (r: SectionResult) => void })
             <>
               <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
               <p style={{ fontSize: 14, color: '#166534', fontWeight: 600 }}>Áudio gravado com sucesso!</p>
-              <button onClick={() => setAudioBlob(null)} style={{ fontSize: 12, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', marginTop: 6 }}>
+              <button onClick={reset} style={{ fontSize: 12, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', marginTop: 6 }}>
                 Regravar
               </button>
             </>
