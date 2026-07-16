@@ -21,6 +21,11 @@ dist-ssr
 android/
 ios/
 
+# Android release signing — NEVER commit (loses ability to update the app on Play Store if leaked)
+*.jks
+*.keystore
+keystore.properties
+
 # Supabase CLI local cache
 supabase/.temp/
 
@@ -34,3 +39,6 @@ supabase/.temp/
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.env*
