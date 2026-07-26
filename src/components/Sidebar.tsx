@@ -180,7 +180,7 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
 
       {/* Rodapé do sidebar */}
       <div style={S.footer}>
-        <span style={S.footerName}>{profile?.name ?? user?.email}</span>
+        <span style={S.footerName}>{profile?.full_name ?? user?.email}</span>
         <button onClick={signOut} style={S.signoutBtn}>Sair</button>
       </div>
     </aside>

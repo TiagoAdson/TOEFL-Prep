@@ -130,7 +130,7 @@ export default function MinhaConta() {
   return (
     <div>
       <h2 style={S.pageTitle}>Minha Conta</h2>
-      <p style={S.pageDesc}>{profile?.name ?? user?.email}</p>
+      <p style={S.pageDesc}>{profile?.full_name ?? user?.email}</p>
 
       {/* 0 — Meta de Nota TOEFL */}
       <Section title="Meta de Nota no TOEFL" icon="🏆">

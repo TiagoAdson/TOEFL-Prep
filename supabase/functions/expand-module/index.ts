@@ -53,7 +53,7 @@ Deno.serve(async req => {
     const { data: profile } = await admin
       .from('profiles')
       .select('role')
-      .eq('user_id', userData.user.id)
+      .eq('id', userData.user.id)
       .single()
 
     if (!profile || profile.role !== 'admin') {
